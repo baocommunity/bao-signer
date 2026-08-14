@@ -20,10 +20,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@noble/curves": "^2.3.0",
     "@noble/hashes": "^2.2.0",
     "@noble/secp256k1": "^3.0.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
+    "bech32": "^2.0.0",
+    "jose": "^6.2.8",
     "nostr-tools": "^2.23.3"
   },
   "peerDependencies": {

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@noble/curves':
+        specifier: ^2.3.0
+        version: 2.3.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.3.0
@@ -20,6 +23,12 @@ importers:
       '@simplewebauthn/server':
         specifier: ^13.3.0
         version: 13.3.2
+      bech32:
+        specifier: ^2.0.0
+        version: 2.0.0
+      jose:
+        specifier: ^6.2.8
+        version: 6.2.8
       nostr-tools:
         specifier: ^2.23.3
         version: 2.24.1(typescript@5.9.3)
@@ -72,6 +81,10 @@ packages:
 
   '@noble/curves@2.0.1':
     resolution: {integrity: sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/curves@2.3.0':
+    resolution: {integrity: sha512-v7cY+4oWYPQszRj6ZFGzTVL7uP2TaLo1xMhWHzYC5wj0ZhOXQ5x+sBre8rF3hi8cAoi0bh1qXoovoOkdFtvqEg==}
     engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@2.0.1':
@@ -313,6 +326,9 @@ packages:
   avvio@9.3.0:
     resolution: {integrity: sha512-g2tQ7LE7oOSqDfwEm3M+ZCMTJc7KiZCdJ4UwyZJb5ckTKyYu50OYmvv0mCFXPuYXoM4zkSt8zM9XQ9KCvxA74A==}
 
+  bech32@2.0.0:
+    resolution: {integrity: sha512-LcknSilhIGatDAsY1ak2I8VtGaHNhgMSYVxFrGLXv+xLHytaKZKcaUJJUE7qmBr7h33o5YQwP55pMI0xmkpJwg==}
+
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
@@ -387,6 +403,9 @@ packages:
   ipaddr.js@2.5.0:
     resolution: {integrity: sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==}
     engines: {node: '>= 10'}
+
+  jose@6.2.8:
+    resolution: {integrity: sha512-Bsdjwm3Qsd/P0jR+BHDe3LytDfY7WBq2HmCCLIwuVRHMuEC9ae7/R474GIUdF1NgCyZjzVo/A9DOiOBtXq8ZoQ==}
 
   json-schema-ref-resolver@3.0.0:
     resolution: {integrity: sha512-hOrZIVL5jyYFjzk7+y7n5JDzGlU8rfWDuYyHwGa2WA8/pcmMHezp2xsVwxrebD/Q9t8Nc5DboieySDpCp4WG4A==}
@@ -774,6 +793,10 @@ snapshots:
     dependencies:
       '@noble/hashes': 2.0.1
 
+  '@noble/curves@2.3.0':
+    dependencies:
+      '@noble/hashes': 2.3.0
+
   '@noble/hashes@2.0.1': {}
 
   '@noble/hashes@2.3.0': {}
@@ -1038,6 +1061,8 @@ snapshots:
       '@fastify/error': 4.2.0
       fastq: 1.20.1
 
+  bech32@2.0.0: {}
+
   chai@6.2.2: {}
 
   convert-source-map@2.0.0: {}
@@ -1113,6 +1138,8 @@ snapshots:
     optional: true
 
   ipaddr.js@2.5.0: {}
+
+  jose@6.2.8: {}
 
   json-schema-ref-resolver@3.0.0:
     dependencies:

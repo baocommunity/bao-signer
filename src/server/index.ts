@@ -1,27 +1,31 @@
 /**
- * bao-signer/server — Fastify plugin for passkey-based Nostr auth.
+ * bao-signer/server — Fastify plugins for passkey-first Nostr auth.
  *
  * ```ts
  * import Fastify from "fastify";
- * import { baoSignerAuthRoutes, MemorySignerStorage } from "bao-signer/server";
- *
- * const app = Fastify();
- * const storage = new MemorySignerStorage();
- * await app.register(baoSignerAuthRoutes, {
- *   storage,
- *   rpId: "example.com",
- *   expectedOrigins: ["https://example.com"],
- *   backupSecret: process.env.BACKUP_HMAC_SECRET!,
- *   authenticate: async (req) => {
- *     const token = req.headers.authorization?.replace(/^Bearer /, "");
- *     const session = token ? await storage.getSession(token) : undefined;
- *     return session?.pubkey ?? null;
- *   },
- * });
+ * import {
+ *   baoSignerAuthRoutes,      // passkeys
+ *   nip98ChallengeRoutes,     // GET /auth/challenge (needed by guest/nostr)
+ *   guestAuthRoutes,          // Quick Start
+ *   nostrAuthRoutes,          // NIP-98 login
+ *   lnurlAuthRoutes,          // Lightning wallet login
+ *   emailAuthRoutes,          // email OTP
+ *   telegramAuthRoutes,       // Telegram widget + OIDC QR
+ *   MemorySignerStorage,
+ * } from "bao-signer/server";
  * ```
+ *
+ * Every secret is injected via plugin options — nothing is read from env,
+ * hardcoded, or defaulted to an insecure value.
  */
 
 export * from "./passkeyAuthRoutes.ts";
+export * from "./nip98.ts";
+export * from "./guestAuthRoutes.ts";
+export * from "./nostrAuthRoutes.ts";
+export * from "./lnurlAuthRoutes.ts";
+export * from "./emailAuthRoutes.ts";
+export * from "./telegramAuthRoutes.ts";
 export * from "./storage.ts";
 export * from "./relayBackupKey.ts";
 export * from "./webauthnChallenges.ts";

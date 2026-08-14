@@ -12,6 +12,7 @@
  * - `insertAccount`/`insertCredential` should tolerate conflicts idempotently
  *   (ON CONFLICT DO NOTHING semantics) — the routes perform explicit
  *   existence checks first.
+ * - OTP codes are stored HASHED (sha256). Never store plaintext codes.
  */
 
 export interface StoredPasskeyCredential {
@@ -33,10 +34,12 @@ export interface StoredAccount {
 
 export interface AccountInsert {
   pubkey: string;
-  /** SHA-256 of the nsec hex (server-generated accounts) or "prf:<pubkey>" marker. */
+  /** SHA-256 of the nsec hex (server-generated accounts) or a marker hash. */
   nsec_hash: string;
   username: string;
   now: number;
+  npub?: string;
+  nostr_only_mode?: number;
 }
 
 export interface AuthMethodInsert {
@@ -63,9 +66,50 @@ export interface SessionMeta {
   expiresAt: number;
 }
 
+/* ── LNURL-auth ─────────────────────────────────────────────── */
+
+export interface LnurlChallengeRow {
+  k1: string;
+  created_at: number;
+  expires_at: number;
+  authenticated: boolean;
+  linking_key?: string;
+  resolved_pubkey?: string;
+  is_new_account?: number;
+  session_token_hash?: string;
+}
+
+/* ── Email OTP ──────────────────────────────────────────────── */
+
+export interface EmailAccountRow {
+  email_hash: string;
+  pubkey: string;
+  username: string;
+  encrypted_nsec?: string;
+  nsec_salt?: string;
+  nsec_iv?: string;
+}
+
+/* ── Telegram OIDC ──────────────────────────────────────────── */
+
+export interface OidcChallengeRow {
+  state: string;
+  code_verifier: string;
+  created_at: number;
+  expires_at: number;
+  authenticated: boolean;
+  auth_id?: string;
+  resolved_pubkey?: string;
+  is_new_account?: number;
+}
+
+/* ── The storage contract ───────────────────────────────────── */
+
 export interface SignerStorage {
+  /* accounts + passkeys */
   getCredentialById(credentialId: string): Promise<StoredPasskeyCredential | undefined>;
   insertAccount(row: AccountInsert): Promise<void>;
+  upsertAccount(row: AccountInsert): Promise<void>;
   insertAuthMethod(row: AuthMethodInsert): Promise<void>;
   insertCredential(row: CredentialInsert): Promise<void>;
   updateCredentialCounter(credentialId: string, counter: number, now: number): Promise<void>;
@@ -73,9 +117,37 @@ export interface SignerStorage {
   updateAccountLastLogin(pubkey: string, now: number): Promise<void>;
   getAccount(pubkey: string): Promise<StoredAccount | undefined>;
   getAuthMethodsForPubkey(pubkey: string): Promise<Array<{ method: string }>>;
+  findAuthMethod(method: string, authId: string): Promise<{ pubkey: string } | undefined>;
   storeSession(token: string, pubkey: string, meta: SessionMeta): Promise<void>;
   /** Run the given operations atomically. */
   withTransaction<T>(fn: () => Promise<T>): Promise<T>;
+
+  /* LNURL-auth challenges */
+  lnurlInsertChallenge(k1: string, now: number, expiresAt: number): Promise<void>;
+  lnurlGetChallenge(k1: string): Promise<LnurlChallengeRow | undefined>;
+  lnurlMarkAuthenticated(
+    k1: string,
+    result: { linkingKey: string; pubkey: string; isNewAccount: boolean; sessionTokenHash: string },
+  ): Promise<void>;
+  lnurlDeleteChallenge(k1: string): Promise<void>;
+
+  /* email OTP */
+  emailCountRecentOtps(emailHash: string, since: number): Promise<number>;
+  emailInsertOtp(codeHash: string, emailHash: string, expiresAt: number): Promise<void>;
+  emailGetValidOtp(codeHash: string, emailHash: string, now: number): Promise<{ email_hash: string } | undefined>;
+  emailMarkOtpUsed(codeHash: string): Promise<void>;
+  emailGetAccount(emailHash: string): Promise<EmailAccountRow | undefined>;
+  emailInsertAccount(row: EmailAccountRow): Promise<boolean>;
+  emailUpdateEncryptedNsec(emailHash: string, ciphertext: string, salt: string, iv: string): Promise<void>;
+
+  /* telegram OIDC challenges */
+  tgInsertChallenge(state: string, codeVerifier: string, now: number, expiresAt: number): Promise<void>;
+  tgGetChallenge(state: string): Promise<OidcChallengeRow | undefined>;
+  tgMarkAuthenticated(state: string, result: { authId: string; pubkey: string; isNewAccount: boolean }): Promise<void>;
+  /** Atomically consume an authenticated challenge (prevents duplicate sessions). */
+  tgConsumeAuthenticated(state: string): Promise<OidcChallengeRow | undefined>;
+  tgDeleteChallenge(state: string): Promise<void>;
+  tgDeleteExpired(now: number): Promise<void>;
 }
 
 /**
@@ -84,9 +156,15 @@ export interface SignerStorage {
  */
 export class MemorySignerStorage implements SignerStorage {
   private credentials = new Map<string, StoredPasskeyCredential>();
-  private accounts = new Map<string, StoredAccount & { nsec_hash: string; last_login_at: number }>();
+  private accounts = new Map<string, StoredAccount & { nsec_hash: string; last_login_at: number; npub: string; nostr_only_mode: number }>();
   private authMethods = new Map<string, { method: string; authId: string; pubkey: string; last_used_at: number }>();
   private sessions = new Map<string, { pubkey: string; meta: SessionMeta }>();
+  private lnurlChallenges = new Map<string, LnurlChallengeRow>();
+  private emailAccounts = new Map<string, EmailAccountRow>();
+  private otpTokens = new Map<string, { codeHash: string; emailHash: string; expiresAt: number; used: boolean; createdAt: number }>();
+  private oidcChallenges = new Map<string, OidcChallengeRow>();
+
+  /* ── accounts + passkeys ── */
 
   async getCredentialById(credentialId: string) {
     return this.credentials.get(credentialId);
@@ -98,8 +176,19 @@ export class MemorySignerStorage implements SignerStorage {
       pubkey: row.pubkey,
       username: row.username,
       nsec_hash: row.nsec_hash,
+      npub: row.npub ?? '',
+      nostr_only_mode: row.nostr_only_mode ?? 0,
       last_login_at: row.now,
     });
+  }
+
+  async upsertAccount(row: AccountInsert): Promise<void> {
+    const existing = this.accounts.get(row.pubkey);
+    if (existing) {
+      existing.last_login_at = row.now;
+      return;
+    }
+    await this.insertAccount(row);
   }
 
   async insertAuthMethod(row: AuthMethodInsert): Promise<void> {
@@ -147,6 +236,11 @@ export class MemorySignerStorage implements SignerStorage {
       .map((m) => ({ method: m.method }));
   }
 
+  async findAuthMethod(method: string, authId: string) {
+    const row = this.authMethods.get(`${method}:${authId}`);
+    return row ? { pubkey: row.pubkey } : undefined;
+  }
+
   async storeSession(token: string, pubkey: string, meta: SessionMeta): Promise<void> {
     this.sessions.set(token, { pubkey, meta });
   }
@@ -165,5 +259,111 @@ export class MemorySignerStorage implements SignerStorage {
   async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
     // Single-process memory store: operations are already effectively atomic.
     return fn();
+  }
+
+  /* ── LNURL-auth ── */
+
+  async lnurlInsertChallenge(k1: string, now: number, expiresAt: number): Promise<void> {
+    this.lnurlChallenges.set(k1, { k1, created_at: now, expires_at: expiresAt, authenticated: false });
+  }
+
+  async lnurlGetChallenge(k1: string) {
+    return this.lnurlChallenges.get(k1);
+  }
+
+  async lnurlMarkAuthenticated(
+    k1: string,
+    result: { linkingKey: string; pubkey: string; isNewAccount: boolean; sessionTokenHash: string },
+  ): Promise<void> {
+    const row = this.lnurlChallenges.get(k1);
+    if (!row) throw new Error(`lnurlMarkAuthenticated: unknown k1 ${k1}`);
+    row.authenticated = true;
+    row.linking_key = result.linkingKey;
+    row.resolved_pubkey = result.pubkey;
+    row.is_new_account = result.isNewAccount ? 1 : 0;
+    row.session_token_hash = result.sessionTokenHash;
+  }
+
+  async lnurlDeleteChallenge(k1: string): Promise<void> {
+    this.lnurlChallenges.delete(k1);
+  }
+
+  /* ── email OTP ── */
+
+  async emailCountRecentOtps(emailHash: string, since: number): Promise<number> {
+    return [...this.otpTokens.values()].filter(
+      (t) => t.emailHash === emailHash && t.createdAt >= since,
+    ).length;
+  }
+
+  async emailInsertOtp(codeHash: string, emailHash: string, expiresAt: number): Promise<void> {
+    this.otpTokens.set(codeHash, { codeHash, emailHash, expiresAt, used: false, createdAt: Math.floor(Date.now() / 1000) });
+  }
+
+  async emailGetValidOtp(codeHash: string, emailHash: string, now: number) {
+    const row = this.otpTokens.get(codeHash);
+    if (!row || row.used || row.emailHash !== emailHash || row.expiresAt < now) return undefined;
+    return { email_hash: row.emailHash };
+  }
+
+  async emailMarkOtpUsed(codeHash: string): Promise<void> {
+    const row = this.otpTokens.get(codeHash);
+    if (row) row.used = true;
+  }
+
+  async emailGetAccount(emailHash: string) {
+    return this.emailAccounts.get(emailHash);
+  }
+
+  /** Returns true if inserted, false if the email already had an account. */
+  async emailInsertAccount(row: EmailAccountRow): Promise<boolean> {
+    if (this.emailAccounts.has(row.email_hash)) return false;
+    this.emailAccounts.set(row.email_hash, { ...row });
+    return true;
+  }
+
+  async emailUpdateEncryptedNsec(emailHash: string, ciphertext: string, salt: string, iv: string): Promise<void> {
+    const row = this.emailAccounts.get(emailHash);
+    if (row) {
+      row.encrypted_nsec = ciphertext;
+      row.nsec_salt = salt;
+      row.nsec_iv = iv;
+    }
+  }
+
+  /* ── telegram OIDC ── */
+
+  async tgInsertChallenge(state: string, codeVerifier: string, now: number, expiresAt: number): Promise<void> {
+    this.oidcChallenges.set(state, { state, code_verifier: codeVerifier, created_at: now, expires_at: expiresAt, authenticated: false });
+  }
+
+  async tgGetChallenge(state: string) {
+    return this.oidcChallenges.get(state);
+  }
+
+  async tgMarkAuthenticated(state: string, result: { authId: string; pubkey: string; isNewAccount: boolean }): Promise<void> {
+    const row = this.oidcChallenges.get(state);
+    if (!row) throw new Error(`tgMarkAuthenticated: unknown state ${state}`);
+    row.authenticated = true;
+    row.auth_id = result.authId;
+    row.resolved_pubkey = result.pubkey;
+    row.is_new_account = result.isNewAccount ? 1 : 0;
+  }
+
+  async tgConsumeAuthenticated(state: string) {
+    const row = this.oidcChallenges.get(state);
+    if (!row || !row.authenticated) return undefined;
+    this.oidcChallenges.delete(state); // atomic consume
+    return row;
+  }
+
+  async tgDeleteChallenge(state: string): Promise<void> {
+    this.oidcChallenges.delete(state);
+  }
+
+  async tgDeleteExpired(now: number): Promise<void> {
+    for (const [state, row] of this.oidcChallenges) {
+      if (row.expires_at < now) this.oidcChallenges.delete(state);
+    }
   }
 }
