@@ -1,0 +1,59 @@
+{
+  "name": "bao-signer",
+  "version": "0.1.0",
+  "description": "Passkey-first Nostr signing: WebAuthn PRF identity derivation, passkey-wrapped key storage, and a Fastify auth server.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./client": "./src/client/index.ts",
+    "./server": "./src/server/index.ts"
+  },
+  "files": [
+    "src",
+    "schema.sql",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0",
+    "@noble/secp256k1": "^3.0.0",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.0",
+    "nostr-tools": "^2.23.3"
+  },
+  "peerDependencies": {
+    "fastify": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "fastify": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "fastify": "^5.8.5",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.2"
+  },
+  "keywords": [
+    "nostr",
+    "passkey",
+    "webauthn",
+    "prf",
+    "signer",
+    "secp256k1",
+    "bao"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baocommunity/bao-signer.git"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
