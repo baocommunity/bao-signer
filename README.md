@@ -26,8 +26,14 @@ comes from*: your authenticator instead of a random file on disk.
 | `bao-signer/client` → `prf` | browser | WebAuthn PRF provider (also usable as a Breez SDK `PasskeyPrfProvider`) |
 | `bao-signer/client` → `nativePasskey` | browser | Zero-dependency key wrapping: AES-256-GCM master key protected by passkey (platform PRF, YubiKey PRF, YubiKey largeBlob) |
 | `bao-signer/client` → `nativePasskeyAuth` | browser | Pure client-side passkey-locked Nostr accounts (no server needed) |
+| `bao-signer/client` → `quickStart` + `keyStorage` | browser | One-click guest onboarding; encrypted local key storage (PBKDF2 + AES-256-GCM) |
+| `bao-signer/client` → `loginFlows` | browser | Thin clients for every server login method (guest, nostr, LNURL, email, Telegram) |
 | `bao-signer/client` → `derivedKeys` | browser/node | Per-community key derivation (HMAC-SHA256, scalar-validated, unlinkable identities) |
-| `bao-signer/server` | node | Fastify plugin: passkey register/login + authenticated account linking |
+| `bao-signer/server` → `passkeyAuthRoutes` | node | Passkey register/login + authenticated account linking |
+| `bao-signer/server` → `guestAuthRoutes` / `nostrAuthRoutes` | node | NIP-98 (kind 27235) signed-event login — guest (24h) and full (30d) sessions |
+| `bao-signer/server` → `lnurlAuthRoutes` | node | Lightning wallet login (k1 challenge → wallet signature → session) |
+| `bao-signer/server` → `emailAuthRoutes` | node | Email OTP (6-digit, hashed, 5/hr cap) — sender hook injected, no creds in module |
+| `bao-signer/server` → `telegramAuthRoutes` | node | Telegram Login Widget + OIDC QR — bot token/secret injected, PII discarded, HMAC auth ids |
 
 ## Quick start
 
