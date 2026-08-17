@@ -22,5 +22,6 @@ export * from "./nativePasskey.ts";
 export * from "./nativePasskeyAuth.ts";
 export * from "./derivedKeys.ts";
 export * from "./keyStorage.ts";
+export * from "./signer.ts";
 export * from "./quickStart.ts";
 export * from "./loginFlows.ts";
