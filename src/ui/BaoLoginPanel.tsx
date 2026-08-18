@@ -256,6 +256,11 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
                 >
                   Connect remote signer
                 </button>
+                {!flow.validateBunkerUrl(bunkerUrl).ok && (
+                  <p style={{ marginTop: 6, textAlign: "center", fontSize: 10, color: V("muted", "#6b6259") }}>
+                    Paste a valid bunker:// URL (with at least one wss:// relay) to enable this button.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -294,12 +299,22 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
                 >
                   Sign in with seed / nsec
                 </button>
+                {!seedInput.trim() && (
+                  <p style={{ marginTop: 6, textAlign: "center", fontSize: 10, color: V("muted", "#6b6259") }}>
+                    Enter the 24 words or nsec key above to enable this button.
+                  </p>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
 
+      {busy && (
+        <p style={{ marginTop: 16, textAlign: "center", fontSize: 11, color: V("muted", "#6b6259"), fontFamily: V("font-mono", "ui-monospace, monospace") }}>
+          Working — check for an authenticator / extension popup…
+        </p>
+      )}
       {error && (
         <p style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: V("danger", "#a03428") }}>
           {error}
