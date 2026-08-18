@@ -347,7 +347,8 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
     }
 
     const now = Math.floor(Date.now() / 1000);
-    if (now - body.auth_date > MAX_AUTH_AGE_SECONDS) {
+    // Absolute window: a far-future auth_date must not live forever either.
+    if (Math.abs(now - body.auth_date) > MAX_AUTH_AGE_SECONDS) {
       return reply.status(401).send({ error: 'Telegram auth data expired' });
     }
 

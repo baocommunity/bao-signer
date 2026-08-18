@@ -39,8 +39,10 @@ export function getNativePasskeyConfig(): Required<NativePasskeyConfig> {
   return nativePasskeyConfig;
 }
 
-/** Namespaced localStorage key. */
-function storageKey(suffix: string): string {
+/** Namespaced localStorage key. Exported so sibling modules
+ * (nativePasskeyAuth) share the SAME configurable prefix — hardcoding a
+ * second prefix splits enrollment state when consumers configure a custom one. */
+export function nativePasskeyStorageKey(suffix: string): string {
   return `${nativePasskeyConfig.storagePrefix}_${suffix}`;
 }
 
@@ -88,8 +90,22 @@ interface PrfExtensionOutput {
   };
 }
 
-function extractPrfSeed(response: { clientExtensionResults?: unknown }): Uint8Array | null {
-  const ext = response.clientExtensionResults as PrfExtensionOutput | undefined;
+/** Extract the PRF seed from either a raw PublicKeyCredential (method) or a
+ * SimpleWebAuthn JSON response (property). Exported for consumers that drive
+ * navigator.credentials directly. */
+export function extractPrfSeed(response: {
+  clientExtensionResults?: unknown;
+  getClientExtensionResults?: () => unknown;
+}): Uint8Array | null {
+  // Raw PublicKeyCredential exposes extension results ONLY via the
+  // getClientExtensionResults() method — there is no clientExtensionResults
+  // property, so reading it always yields undefined. JSON responses
+  // (SimpleWebAuthn) carry the property instead. Support both.
+  const ext = (
+    typeof response.getClientExtensionResults === "function"
+      ? response.getClientExtensionResults()
+      : response.clientExtensionResults
+  ) as PrfExtensionOutput | undefined;
   if (!ext?.prf?.results?.first) return null;
   return new Uint8Array(ext.prf.results.first);
 }
@@ -269,10 +285,10 @@ export async function registerPlatformPasskey(masterKey: CryptoKey): Promise<Pas
   const wrapped = await wrapMasterKey(masterKey, wrappingKey);
 
   // Store enrollment data
-  localStorage.setItem(storageKey("credential_id"), credentialId);
-  localStorage.setItem(storageKey("wrapped_master"), wrapped);
-  localStorage.setItem(storageKey("is_yubikey"), "false");
-  localStorage.setItem(storageKey("method"), "prf");
+  localStorage.setItem(nativePasskeyStorageKey("credential_id"), credentialId);
+  localStorage.setItem(nativePasskeyStorageKey("wrapped_master"), wrapped);
+  localStorage.setItem(nativePasskeyStorageKey("is_yubikey"), "false");
+  localStorage.setItem(nativePasskeyStorageKey("method"), "prf");
 
   return { credentialId, isYubiKey: false, method: "prf" };
 }
@@ -348,10 +364,10 @@ export async function registerYubiKeyWithPrf(masterKey: CryptoKey): Promise<Pass
   const wrapped = await wrapMasterKey(masterKey, wrappingKey);
 
   // Store enrollment data
-  localStorage.setItem(storageKey("credential_id"), credentialId);
-  localStorage.setItem(storageKey("wrapped_master"), wrapped);
-  localStorage.setItem(storageKey("is_yubikey"), "true");
-  localStorage.setItem(storageKey("method"), "prf");
+  localStorage.setItem(nativePasskeyStorageKey("credential_id"), credentialId);
+  localStorage.setItem(nativePasskeyStorageKey("wrapped_master"), wrapped);
+  localStorage.setItem(nativePasskeyStorageKey("is_yubikey"), "true");
+  localStorage.setItem(nativePasskeyStorageKey("method"), "prf");
 
   return { credentialId, isYubiKey: true, method: "prf" };
 }
@@ -457,12 +473,22 @@ export async function registerYubiKeyPasskey(masterKey: CryptoKey): Promise<Pass
     throw new Error("YubiKey largeBlob read-back verification failed. Enrollment aborted.");
   }
 
-  localStorage.setItem(storageKey("credential_id"), credentialId);
-  localStorage.setItem(storageKey("wrapped_master"), wrapped);
-  localStorage.setItem(storageKey("is_yubikey"), "true");
-  localStorage.setItem(storageKey("method"), "largeBlob");
+  localStorage.setItem(nativePasskeyStorageKey("credential_id"), credentialId);
+  localStorage.setItem(nativePasskeyStorageKey("wrapped_master"), wrapped);
+  localStorage.setItem(nativePasskeyStorageKey("is_yubikey"), "true");
+  localStorage.setItem(nativePasskeyStorageKey("method"), "largeBlob");
 
   return { credentialId, isYubiKey: true, method: "largeBlob" };
+}
+
+/** True when the authenticator ceremony was cancelled/timed out by the user
+ * (or no authenticator responded) — NOT a genuine capability failure. */
+/** Exported so consumers can distinguish user-cancel from capability failures. */
+export function isCancelError(e: unknown): boolean {
+  return (
+    e instanceof DOMException &&
+    (e.name === "NotAllowedError" || e.name === "AbortError")
+  );
 }
 
 /* ── Authentication / Unlock ───────────────────────────────── */
@@ -503,16 +529,16 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 export async function unlockWithPasskey(): Promise<PasskeyUnlockResult> {
-  const credentialId = localStorage.getItem(storageKey("credential_id"));
-  const wrappedB64 = localStorage.getItem(storageKey("wrapped_master"));
-  const method = localStorage.getItem(storageKey("method")) as "prf" | "largeBlob" | null;
-  const isYubiKeyLegacy = localStorage.getItem(storageKey("is_yubikey")) === "true";
+  const credentialId = localStorage.getItem(nativePasskeyStorageKey("credential_id"));
+  const wrappedB64 = localStorage.getItem(nativePasskeyStorageKey("wrapped_master"));
+  const method = localStorage.getItem(nativePasskeyStorageKey("method")) as "prf" | "largeBlob" | null;
+  const isYubiKeyLegacy = localStorage.getItem(nativePasskeyStorageKey("is_yubikey")) === "true";
 
   if (!credentialId || !wrappedB64) {
     throw new Error("No passkey enrolled");
   }
 
-  // Legacy enrollments (before storageKey("method") existed)
+  // Legacy enrollments (before nativePasskeyStorageKey("method") existed)
   // isYubiKey='false' → PRF platform, isYubiKey='true' → largeBlob YubiKey
   const enrolledMethod: "prf" | "largeBlob" = method ?? (isYubiKeyLegacy ? "largeBlob" : "prf");
 
@@ -555,7 +581,9 @@ export async function unlockWithPasskey(): Promise<PasskeyUnlockResult> {
         const masterKey = await unwrapMasterKey(wrappedB64, derivedKey);
         return { masterKey, method: "largeBlob" };
       }
-    } catch {
+    } catch (e) {
+      // User cancelled → report honestly, never mislabel as unavailable.
+      if (isCancelError(e)) throw e;
       // largeBlob read failed — try PRF fallback (YubiKey may support both)
     }
   }
@@ -564,7 +592,8 @@ export async function unlockWithPasskey(): Promise<PasskeyUnlockResult> {
   try {
     const masterKey = await unlockWithPrf(credentialId, wrappedB64);
     return { masterKey, method: "prf" };
-  } catch {
+  } catch (e) {
+    if (isCancelError(e)) throw e;
     // PRF also failed
   }
 
@@ -581,13 +610,13 @@ export async function unlockWithPasskey(): Promise<PasskeyUnlockResult> {
 /* ── Enrollment Status ─────────────────────────────────────── */
 
 export function hasPasskeyEnrolled(): boolean {
-  return !!localStorage.getItem(storageKey("credential_id")) && !!localStorage.getItem(storageKey("wrapped_master"));
+  return !!localStorage.getItem(nativePasskeyStorageKey("credential_id")) && !!localStorage.getItem(nativePasskeyStorageKey("wrapped_master"));
 }
 
 export function getPasskeyEnrollment(): PasskeyEnrollment | null {
-  const credentialId = localStorage.getItem(storageKey("credential_id"));
-  const isYubiKey = localStorage.getItem(storageKey("is_yubikey")) === "true";
-  const method = localStorage.getItem(storageKey("method")) as "prf" | "largeBlob" | null;
+  const credentialId = localStorage.getItem(nativePasskeyStorageKey("credential_id"));
+  const isYubiKey = localStorage.getItem(nativePasskeyStorageKey("is_yubikey")) === "true";
+  const method = localStorage.getItem(nativePasskeyStorageKey("method")) as "prf" | "largeBlob" | null;
   if (!credentialId) return null;
   return { credentialId, isYubiKey, method: method ?? (isYubiKey ? "largeBlob" : "prf") };
 }
@@ -595,22 +624,22 @@ export function getPasskeyEnrollment(): PasskeyEnrollment | null {
 /** Remove passkey enrollment. PIN remains as fallback. */
 export function removePasskeyEnrollment(): void {
   try {
-    localStorage.removeItem(storageKey("credential_id"));
+    localStorage.removeItem(nativePasskeyStorageKey("credential_id"));
   } catch {
     /* ignore */
   }
   try {
-    localStorage.removeItem(storageKey("wrapped_master"));
+    localStorage.removeItem(nativePasskeyStorageKey("wrapped_master"));
   } catch {
     /* ignore */
   }
   try {
-    localStorage.removeItem(storageKey("is_yubikey"));
+    localStorage.removeItem(nativePasskeyStorageKey("is_yubikey"));
   } catch {
     /* ignore */
   }
   try {
-    localStorage.removeItem(storageKey("method"));
+    localStorage.removeItem(nativePasskeyStorageKey("method"));
   } catch {
     /* ignore */
   }

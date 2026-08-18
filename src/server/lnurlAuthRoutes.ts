@@ -42,6 +42,12 @@ function consumeSessionToken(k1: string): string | null {
   return entry.token;
 }
 
+/** Test hook: drop a held token, simulating the process-restart window where
+ * the challenge survives (persistent store) but the in-memory token is gone. */
+export function __dropHeldSessionTokenForTest(k1: string): void {
+  pendingSessionTokens.delete(k1);
+}
+
 function hashSessionToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -57,10 +63,14 @@ function encodeLnurl(callbackUrl: string): string {
 
 function verifyLnurlSignature(sigHex: string, k1Hex: string, keyHex: string): boolean {
   try {
+    // lowS: false — some Lightning wallets emit high-S DER signatures;
+    // rejecting them is an availability failure, not a security control
+    // (the message hash binds the signature either way).
     return secp256k1.verify(
       Buffer.from(sigHex, 'hex'),
       Buffer.from(k1Hex, 'hex'),
       Buffer.from(keyHex, 'hex'),
+      { lowS: false },
     );
   } catch {
     return false;
@@ -216,15 +226,19 @@ export async function lnurlAuthRoutes(app: FastifyInstance, opts: LnurlAuthOptio
     }
 
     const nsecData = consumeNsec(k1);
-    // Consume the held token (one-shot). If missing (e.g. process restart
-    // between callback and poll), mint a fresh session so login completes.
-    let sessionToken = consumeSessionToken(k1);
+    // MED-1 FIX: the held token is strictly one-shot. If it is gone (a
+    // concurrent poll already consumed it, or the process restarted), we
+    // must NOT mint a fresh session — that would hand out a second valid
+    // session for the same challenge. Fail honestly instead.
+    const sessionToken = consumeSessionToken(k1);
     if (!sessionToken) {
-      sessionToken = `bao_sess_${randomBytes(32).toString('hex')}`;
-      await storage.storeSession(sessionToken, pubkey, {
-        userAgent: request.headers['user-agent'] || '',
-        ipAddress: request.ip,
-        expiresAt: now + ttl,
+      await storage.lnurlDeleteChallenge(k1);
+      return reply.status(410).send({
+        error: {
+          code: 'LNURL_SESSION_CONSUMED',
+          message: 'Login session was already consumed (or the server restarted). Request a new challenge.',
+        },
+        meta,
       });
     }
     await storage.lnurlDeleteChallenge(k1);

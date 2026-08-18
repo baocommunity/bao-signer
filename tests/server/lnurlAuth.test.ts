@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Fastify from "fastify";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { lnurlAuthRoutes } from "../../src/server/lnurlAuthRoutes.ts";
+import { lnurlAuthRoutes, __dropHeldSessionTokenForTest } from "../../src/server/lnurlAuthRoutes.ts";
 import { MemorySignerStorage } from "../../src/server/storage.ts";
 
 const SECRET = "lnurl-test-secret";
@@ -131,5 +131,43 @@ describe("LNURL-auth", () => {
       secret: "",
     });
     await expect(app2.ready()).rejects.toThrow(/secret/);
+  });
+
+  it("MED-1: second poll gets 410 — no fresh session is minted", async () => {
+    const { k1 } = await startChallenge(app);
+    const wallet = makeWallet();
+    const sig = signK1(wallet.privKey, k1);
+    await app.inject({
+      method: "GET",
+      url: `/auth/lnurl/callback?tag=login&k1=${k1}&sig=${sig}&key=${wallet.pubKeyHex}`,
+    });
+
+    const first = await app.inject({ method: "GET", url: `/auth/lnurl/poll?k1=${k1}` });
+    expect(first.json().authenticated).toBe(true);
+    const token1 = first.json().session.sessionToken;
+
+    // The challenge is deleted on first poll — a second poll is simply gone.
+    const second = await app.inject({ method: "GET", url: `/auth/lnurl/poll?k1=${k1}` });
+    expect(second.statusCode).toBe(404);
+    expect(token1).toMatch(/^bao_sess_/);
+  });
+
+  it("MED-1: poll in the restart window (challenge alive, held token gone) fails 410 — no fresh session minted", async () => {
+    const { k1 } = await startChallenge(app);
+    const wallet = makeWallet();
+    const sig = signK1(wallet.privKey, k1);
+    await app.inject({
+      method: "GET",
+      url: `/auth/lnurl/callback?tag=login&k1=${k1}&sig=${sig}&key=${wallet.pubKeyHex}`,
+    });
+
+    // Simulate process restart: persistent challenge survives, in-memory
+    // held token is lost.
+    __dropHeldSessionTokenForTest(k1);
+
+    const poll = await app.inject({ method: "GET", url: `/auth/lnurl/poll?k1=${k1}` });
+    expect(poll.statusCode).toBe(410);
+    expect(poll.json().error.code).toBe("LNURL_SESSION_CONSUMED");
+    expect(poll.json().session?.sessionToken).toBeUndefined();
   });
 });

@@ -1,23 +1,32 @@
 {
   "name": "bao-signer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Passkey-first Nostr signing: WebAuthn PRF identity derivation, passkey-wrapped key storage, and a Fastify auth server.",
   "license": "MIT",
   "type": "module",
   "exports": {
-    "./client": "./src/client/index.ts",
-    "./server": "./src/server/index.ts"
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    }
   },
   "files": [
-    "src",
+    "dist",
     "schema.sql",
     "README.md",
     "SECURITY.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@noble/curves": "^2.3.0",
@@ -58,5 +67,7 @@
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "main": "./dist/client/index.js",
+  "types": "./dist/client/index.d.ts"
 }

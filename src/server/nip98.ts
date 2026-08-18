@@ -56,6 +56,7 @@ export function verifyNip98Binding(
   event: { tags: unknown[]; kind: number },
   requestUrl: string,
   requestMethod: string,
+  opts: { pathPrefixStrip?: string } = {},
 ): boolean {
   if (event.kind !== 27235) return false;
 
@@ -66,8 +67,12 @@ export function verifyNip98Binding(
     (t: unknown) => Array.isArray(t) && t[0] === 'method',
   ) as string[] | undefined;
 
+  // The deployment path prefix to ignore when comparing URLs (e.g. an API
+  // gateway mount). Configurable; pass '' to disable stripping.
+  const stripPrefix = opts.pathPrefixStrip ?? '/bao-api';
   const normalizePath = (p: string): string => {
-    return p.replace(/^\/bao-api/, '').replace(/\/$/, '') || '/';
+    const stripped = stripPrefix ? p.replace(new RegExp('^' + stripPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '') : p;
+    return stripped.replace(/\/$/, '') || '/';
   };
 
   let urlMatch = false;

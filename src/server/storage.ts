@@ -136,6 +136,8 @@ export interface SignerStorage {
   emailInsertOtp(codeHash: string, emailHash: string, expiresAt: number): Promise<void>;
   emailGetValidOtp(codeHash: string, emailHash: string, now: number): Promise<{ email_hash: string } | undefined>;
   emailMarkOtpUsed(codeHash: string): Promise<void>;
+  /** Delete ALL outstanding OTPs for an email (lockout / post-success hygiene). Returns count removed. */
+  emailDeleteOtpsForEmail(emailHash: string): Promise<number>;
   emailGetAccount(emailHash: string): Promise<EmailAccountRow | undefined>;
   emailInsertAccount(row: EmailAccountRow): Promise<boolean>;
   emailUpdateEncryptedNsec(emailHash: string, ciphertext: string, salt: string, iv: string): Promise<void>;
@@ -309,6 +311,17 @@ export class MemorySignerStorage implements SignerStorage {
   async emailMarkOtpUsed(codeHash: string): Promise<void> {
     const row = this.otpTokens.get(codeHash);
     if (row) row.used = true;
+  }
+
+  async emailDeleteOtpsForEmail(emailHash: string): Promise<number> {
+    let removed = 0;
+    for (const [codeHash, row] of this.otpTokens) {
+      if (row.emailHash === emailHash) {
+        this.otpTokens.delete(codeHash);
+        removed++;
+      }
+    }
+    return removed;
   }
 
   async emailGetAccount(emailHash: string) {

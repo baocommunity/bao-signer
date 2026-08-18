@@ -19,6 +19,7 @@ import {
   isPrfAvailable,
   isWebAuthnAvailable,
   isLargeBlobAvailable,
+  nativePasskeyStorageKey,
 } from "./nativePasskey.ts";
 
 import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
@@ -26,9 +27,13 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 
 /* ── Constants ─────────────────────────────────────────────── */
 
-const NATIVE_PASSKEY_ENC_SK_KEY = "bao_native_passkey_encrypted_sk";
-const NATIVE_PASSKEY_PUBKEY_KEY = "bao_native_passkey_pubkey";
-const NATIVE_PASSKEY_METHOD_KEY = "bao_native_passkey_method";
+// Keys derive from the SHARED configurable prefix (nativePasskey.storageKey),
+// evaluated at CALL time so configureNativePasskey({ storagePrefix }) works
+// even after module import. Under the default prefix the names are identical
+// to the historical hardcoded ones, so existing enrollments keep working.
+const encSkKey = (): string => nativePasskeyStorageKey("encrypted_sk");
+const pubkeyKey = (): string => nativePasskeyStorageKey("pubkey");
+const methodKey = (): string => nativePasskeyStorageKey("method");
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -159,11 +164,11 @@ export async function registerNativePasskeyAccount(): Promise<NativePasskeyRegis
 
   // 5. Store — value is AES-GCM ciphertext, never plaintext.
   localStorage.setItem(
-    NATIVE_PASSKEY_ENC_SK_KEY,
+    encSkKey(),
     cipherText,
   );
-  localStorage.setItem(NATIVE_PASSKEY_PUBKEY_KEY, pubkey);
-  localStorage.setItem(NATIVE_PASSKEY_METHOD_KEY, method);
+  localStorage.setItem(pubkeyKey(), pubkey);
+  localStorage.setItem(methodKey(), method);
 
   return {
     identity: { pubkey, npub, nsec, secretKey },
@@ -189,7 +194,7 @@ export async function loginNativePasskeyAccount(): Promise<NativePasskeyIdentity
   const { masterKey } = await unlockWithPasskey();
 
   // 2. Decrypt nsec
-  const cipherText = localStorage.getItem(NATIVE_PASSKEY_ENC_SK_KEY);
+  const cipherText = localStorage.getItem(encSkKey());
   if (!cipherText) {
     throw new Error("Native passkey account is corrupted (missing encrypted key).");
   }
@@ -211,7 +216,7 @@ export async function loginNativePasskeyAccount(): Promise<NativePasskeyIdentity
 
 /** Check if the user has a native passkey account stored locally. */
 export function hasNativePasskeyAccount(): boolean {
-  return hasPasskeyEnrolled() && !!localStorage.getItem(NATIVE_PASSKEY_ENC_SK_KEY);
+  return hasPasskeyEnrolled() && !!localStorage.getItem(encSkKey());
 }
 
 /** Get detailed availability info for the native passkey flow. */
@@ -234,17 +239,17 @@ export async function getNativePasskeyAvailability(): Promise<NativePasskeyAvail
 export function removeNativePasskeyAccount(): void {
   removePasskeyEnrollment();
   try {
-    localStorage.removeItem(NATIVE_PASSKEY_ENC_SK_KEY);
+    localStorage.removeItem(encSkKey());
   } catch {
     /* ignore */
   }
   try {
-    localStorage.removeItem(NATIVE_PASSKEY_PUBKEY_KEY);
+    localStorage.removeItem(pubkeyKey());
   } catch {
     /* ignore */
   }
   try {
-    localStorage.removeItem(NATIVE_PASSKEY_METHOD_KEY);
+    localStorage.removeItem(methodKey());
   } catch {
     /* ignore */
   }

@@ -18,14 +18,18 @@ import {
   encodeNpub,
   storeKeyPair,
   loadStoredPrivateKey,
+  keyStorageKey,
 } from "./keyStorage.ts";
 
+// Evaluated at call time so configureKeyStorage({ storagePrefix }) applies
+// even after import. Default-prefix names are unchanged from the historical
+// hardcoded ones.
 const STORAGE_KEYS = {
-  QUICK_START_ACCOUNT: "bao_signer_quick_start_account",
-  NEEDS_BACKUP: "bao_signer_needs_backup",
-  BACKUP_REMINDER_DISMISSED: "bao_signer_backup_reminder_dismissed",
-  FIRST_ACTION_COMPLETED: "bao_signer_first_action_completed",
-  BACKUP_COMPLETED: "bao_signer_backup_completed",
+  get QUICK_START_ACCOUNT() { return keyStorageKey("quick_start_account"); },
+  get NEEDS_BACKUP() { return keyStorageKey("needs_backup"); },
+  get BACKUP_REMINDER_DISMISSED() { return keyStorageKey("backup_reminder_dismissed"); },
+  get FIRST_ACTION_COMPLETED() { return keyStorageKey("first_action_completed"); },
+  get BACKUP_COMPLETED() { return keyStorageKey("backup_completed"); },
 } as const;
 
 export interface QuickStartAccount {

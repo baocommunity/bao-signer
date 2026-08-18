@@ -79,6 +79,66 @@ export async function isBreezPrfAvailable(): Promise<boolean> {
 }
 
 /**
+ * Shared PRF-seed extraction with the self-auth fallback: some authenticators
+ * report `prf.enabled` at creation but withhold the result until the first
+ * assertion. Used by both the (legacy) direct register flow and the
+ * authenticated account-link flow.
+ */
+async function extractPrfSeedWithFallback(
+  credential: RegistrationResponseJSON,
+  rpId?: string,
+): Promise<Uint8Array> {
+  let prfSeed = extractPrfSeedFromResponse(credential);
+
+  if (!prfSeed) {
+    const extResults = credential.clientExtensionResults as AuthenticationExtensionsClientOutputs & {
+      prf?: { enabled?: boolean };
+    };
+    if (extResults?.prf?.enabled) {
+      const authOptionsJSON: PublicKeyCredentialRequestOptionsJSON = {
+        challenge: bufferToBase64URLString(crypto.getRandomValues(new Uint8Array(32)).buffer),
+        rpId: rpId || window.location.hostname,
+        allowCredentials: [
+          {
+            id: credential.rawId || credential.id,
+            type: "public-key",
+          },
+        ],
+        userVerification: "required",
+        extensions: {
+          prf: {
+            eval: {
+              first: new TextEncoder().encode(DEFAULT_PRF_SALT),
+            },
+          },
+        } as AuthenticationExtensionsClientInputs,
+      };
+      try {
+        const authResponse = await startAuthentication({
+          optionsJSON: authOptionsJSON,
+        });
+        const authPrfSeed = extractPrfSeedFromResponse(authResponse);
+        if (authPrfSeed) {
+          prfSeed = authPrfSeed;
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        throw new Error(
+          `${BreezPasskeyError.PRF_RESULT_NOT_AVAILABLE}: PRF result not available after self-authentication: ${message}`,
+        );
+      }
+    }
+  }
+
+  if (!prfSeed) {
+    throw new Error(
+      `${BreezPasskeyError.PRF_NOT_SUPPORTED}: PRF extension not supported or returned no result. Ensure your browser supports WebAuthn PRF.`,
+    );
+  }
+  return prfSeed;
+}
+
+/**
  * Register a new Breez PRF passkey, derive a deterministic Nostr identity from the
  * PRF seed, and link the passkey to the backend with the client-generated pubkey.
  *
@@ -96,8 +156,10 @@ export async function isBreezPrfAvailable(): Promise<boolean> {
  * anonymous registration with a client-supplied pubkey
  * (`PRF_ACCOUNT_LINK_REQUIRES_AUTH`). A WebAuthn attestation proves control of
  * the new credential, not of the claimed Nostr pubkey, so PRF identities are
- * linked through the authenticated account-link flow instead. This client
- * function targets servers that accept direct PRF registration.
+ * linked through the authenticated account-link flow instead. Against the
+ * reference server, use `linkBreezPasskey({ sessionToken })` after
+ * establishing a session (see loginFlows.ts) — this function targets
+ * non-reference servers that accept direct PRF registration.
  */
 export async function registerBreezPasskey(options: {
   username?: string;
@@ -163,56 +225,7 @@ export async function registerBreezPasskey(options: {
     optionsJSON: webAuthnOptions,
   });
 
-  let prfSeed = extractPrfSeedFromResponse(credential);
-
-  if (!prfSeed) {
-    const extResults = credential.clientExtensionResults as AuthenticationExtensionsClientOutputs & {
-      prf?: { enabled?: boolean };
-    };
-    if (extResults?.prf?.enabled) {
-      // PRF is supported but result not returned during creation.
-      // Do a self-authentication to extract the seed.
-      const authOptionsJSON: PublicKeyCredentialRequestOptionsJSON = {
-        challenge: bufferToBase64URLString(crypto.getRandomValues(new Uint8Array(32)).buffer),
-        rpId: webAuthnOptions.rp.id || window.location.hostname,
-        allowCredentials: [
-          {
-            id: credential.rawId || credential.id,
-            type: "public-key",
-          },
-        ],
-        userVerification: "required",
-        extensions: {
-          prf: {
-            eval: {
-              first: new TextEncoder().encode(DEFAULT_PRF_SALT),
-            },
-          },
-        } as AuthenticationExtensionsClientInputs,
-      };
-      try {
-        const authResponse = await startAuthentication({
-          optionsJSON: authOptionsJSON,
-        });
-        const authPrfSeed = extractPrfSeedFromResponse(authResponse);
-        if (authPrfSeed) {
-          prfSeed = authPrfSeed;
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        throw new Error(
-          `${BreezPasskeyError.PRF_RESULT_NOT_AVAILABLE}: PRF result not available after self-authentication: ${message}`,
-        );
-      }
-    }
-  }
-
-  if (!prfSeed) {
-    throw new Error(
-      `${BreezPasskeyError.PRF_NOT_SUPPORTED}: PRF extension not supported or returned no result. Ensure your browser supports WebAuthn PRF.`,
-    );
-  }
-
+  const prfSeed = await extractPrfSeedWithFallback(credential, webAuthnOptions.rp.id);
   const { pubkeyHex, npub, nsec } = deriveNostrKeysFromPrfSeed(prfSeed);
   const credentialId = credential.id;
   const prfSeedHex = bytesToHex(prfSeed);
@@ -358,6 +371,129 @@ export async function loginBreezPasskey(options: {
     nsec,
     credentialId,
     session: data.session ?? data,
+  };
+}
+
+
+/* ═══ Authenticated account-link flow (the supported server path) ═════════
+ *
+ * The reference server REJECTS anonymous PRF registration
+ * (PRF_ACCOUNT_LINK_REQUIRES_AUTH): an attestation proves control of the new
+ * credential, not of a claimed Nostr pubkey. The supported flow is therefore:
+ *
+ *   1. establish a session first (guest/NIP-98/email/… — see loginFlows.ts)
+ *   2. linkBreezPasskey({ sessionToken }) — binds a NEW passkey whose PRF
+ *      derives the SAME deterministic identity to the session's account
+ *
+ * All three functions send `Authorization: Bearer <sessionToken>`.
+ */
+
+function bearerHeaders(sessionToken: string): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${sessionToken}`,
+  };
+}
+
+/**
+ * POST /auth/link/passkey/options — registration options for linking a new
+ * passkey to the session's account. The returned options already carry a
+ * challenge bound to the session pubkey server-side.
+ */
+export async function linkPasskeyOptions(opts: {
+  sessionToken: string;
+  apiBaseUrl?: string;
+}): Promise<{ challengeId: string; options: PublicKeyCredentialCreationOptionsJSON }> {
+  const API_BASE = getSignerApiBase(opts.apiBaseUrl);
+  const res = await fetch(`${API_BASE}/v1/auth/link/passkey/options`, {
+    method: "POST",
+    headers: bearerHeaders(opts.sessionToken),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `${BreezPasskeyError.SERVER_ERROR}: Failed to get link options (${res.status})`,
+    );
+  }
+  return (await res.json()) as {
+    challengeId: string;
+    options: PublicKeyCredentialCreationOptionsJSON;
+  };
+}
+
+/**
+ * POST /auth/link/passkey/register — complete the link with the created
+ * credential. The server verifies the attestation against the session-bound
+ * challenge and binds the credential to the session's account.
+ */
+export async function linkPasskeyRegister(opts: {
+  sessionToken: string;
+  challengeId: string;
+  credential: RegistrationResponseJSON;
+  apiBaseUrl?: string;
+}): Promise<{ linked: boolean; credentialId?: string }> {
+  const API_BASE = getSignerApiBase(opts.apiBaseUrl);
+  const res = await fetch(`${API_BASE}/v1/auth/link/passkey/register`, {
+    method: "POST",
+    headers: bearerHeaders(opts.sessionToken),
+    body: JSON.stringify({
+      challengeId: opts.challengeId,
+      credential: opts.credential,
+    }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
+    const detail = body?.error?.message ?? body?.error?.code ?? `HTTP ${res.status}`;
+    throw new Error(`${BreezPasskeyError.REGISTRATION_FAILED}: Passkey link failed: ${detail}`);
+  }
+  return (await res.json()) as { linked: boolean; credentialId?: string };
+}
+
+/**
+ * Full PRF link flow: options → WebAuthn create (PRF-injected) → derive the
+ * deterministic Nostr identity from the PRF seed → register the link.
+ *
+ * Requires an existing session (any login method). Returns the derived
+ * identity; on subsequent logins use loginBreezPasskey() which re-derives
+ * the same identity from the same passkey.
+ */
+export async function linkBreezPasskey(opts: {
+  sessionToken: string;
+  apiBaseUrl?: string;
+}): Promise<{
+  credential: RegistrationResponseJSON;
+  prfSeed: Uint8Array;
+  prfSeedHex: string;
+  pubkeyHex: string;
+  npub: string;
+  nsec: string;
+  credentialId: string;
+}> {
+  const { challengeId, options } = await linkPasskeyOptions(opts);
+
+  // Inject the PRF extension so the seed is derived in the same prompt.
+  options.extensions = {
+    ...(options.extensions || {}),
+    prf: {
+      eval: {
+        first: new TextEncoder().encode(DEFAULT_PRF_SALT),
+      },
+    },
+  } as AuthenticationExtensionsClientInputs;
+
+  const credential = await startRegistration({ optionsJSON: options });
+  const prfSeed = await extractPrfSeedWithFallback(credential, options.rp.id);
+  const { pubkeyHex, npub, nsec } = deriveNostrKeysFromPrfSeed(prfSeed);
+
+  await linkPasskeyRegister({ ...opts, challengeId, credential });
+
+  return {
+    credential,
+    prfSeed,
+    prfSeedHex: bytesToHex(prfSeed),
+    pubkeyHex,
+    npub,
+    nsec,
+    credentialId: credential.id,
   };
 }
 

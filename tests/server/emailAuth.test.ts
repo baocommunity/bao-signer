@@ -105,35 +105,44 @@ describe("email OTP auth", () => {
     expect(sent[0].to).toBe("mixed@example.com");
   });
 
-  it("register: links an existing nsec, idempotent, conflicts on different key", async () => {
+  it("register: OTP-bound (HIGH-1) — no code → 400, valid OTP on auto-created email → 409, idempotent same-key → 200", async () => {
     const sk = generateSecretKey();
     const nsec = nip19.nsecEncode(sk);
-    const pubkey = getPublicKey(sk);
 
-    const reg = await app.inject({
+    // Binding without proof of inbox ownership is refused.
+    const noCode = await app.inject({
       method: "POST",
       url: "/auth/email/register",
       payload: { email: "link@example.com", nsec, username: "linked" },
     });
-    expect(reg.statusCode).toBe(200);
-    expect(reg.json().pubkey).toBe(pubkey);
+    expect(noCode.statusCode).toBe(400);
 
-    // Idempotent with same key
+    // With an OTP: /request auto-creates a server-key account for the email,
+    // so registering a DIFFERENT (user-supplied) key conflicts with remedy.
+    await app.inject({ method: "POST", url: "/auth/email/request", payload: { email: "link@example.com" } });
+    const withCode = await app.inject({
+      method: "POST",
+      url: "/auth/email/register",
+      payload: { email: "link@example.com", nsec, username: "linked", code: sent[0].code },
+    });
+    expect(withCode.statusCode).toBe(409);
+    expect(withCode.json().error).toMatch(/account-link/);
+
+    // Idempotent with the account's OWN key (from first-login nsec) needs no code.
+    const verify = await app.inject({
+      method: "POST",
+      url: "/auth/email/verify",
+      payload: { email: "link@example.com", code: sent[0].code },
+    });
+    expect(verify.statusCode).toBe(200);
+    const accountNsec = verify.json().session.nsec;
     const again = await app.inject({
       method: "POST",
       url: "/auth/email/register",
-      payload: { email: "link@example.com", nsec, username: "linked" },
+      payload: { email: "link@example.com", nsec: accountNsec, username: "linked" },
     });
     expect(again.statusCode).toBe(200);
-
-    // Conflict with different key
-    const other = nip19.nsecEncode(generateSecretKey());
-    const conflict = await app.inject({
-      method: "POST",
-      url: "/auth/email/register",
-      payload: { email: "link@example.com", nsec: other, username: "x" },
-    });
-    expect(conflict.statusCode).toBe(409);
+    expect(again.json().registered).toBe(true);
   });
 
   it("fails closed without a sendEmail hook", async () => {

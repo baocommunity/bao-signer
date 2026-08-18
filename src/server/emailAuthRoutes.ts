@@ -80,6 +80,23 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
   const relayBackupKeyFor = (email: string): string =>
     createHmac('sha256', opts.backupSecret).update(`email:${email}`).digest('hex').slice(0, 32);
 
+  // MED-2: per-email OTP failure lockout (process-local). Bounds online
+  // brute force of the 6-digit space even without per-IP rate limits:
+  // 10 failures within the OTP TTL invalidates ALL outstanding codes.
+  const MAX_OTP_FAILURES = 10;
+  const otpFailures = new Map<string, { count: number; windowStart: number }>();
+  const recordOtpFailure = (emailHash: string): number => {
+    const now = Math.floor(Date.now() / 1000);
+    const entry = otpFailures.get(emailHash);
+    if (!entry || now - entry.windowStart > OTP_TTL_SECONDS) {
+      otpFailures.set(emailHash, { count: 1, windowStart: now });
+      return 1;
+    }
+    entry.count++;
+    return entry.count;
+  };
+  const clearOtpFailures = (emailHash: string): void => { otpFailures.delete(emailHash); };
+
   // ---------------------------------------------------------------
   // POST /auth/email/request
   // ---------------------------------------------------------------
@@ -146,7 +163,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
     await storage.emailInsertOtp(hashToken(code), emailHash, now + OTP_TTL_SECONDS);
 
     if (opts.logOtpCodes) {
-      request.log.info({ email_hash: emailHash, otp_masked: code.slice(0, 3) + '***' }, 'OTP code generated (masked)');
+      request.log.info({ email_hash: emailHash, otp_masked: code.slice(0, 2) + '****' }, 'OTP code generated (masked)');
     }
 
     // Fire-and-forget: respond immediately; the hashed OTP is already stored.
@@ -184,9 +201,21 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
     const emailHash = hashEmail(email);
 
     const tokenRow = await storage.emailGetValidOtp(hashToken(code), emailHash, now);
-    if (!tokenRow) return reply.status(401).send({ error: 'Invalid or expired code' });
+    if (!tokenRow) {
+      const failures = recordOtpFailure(emailHash);
+      if (failures >= MAX_OTP_FAILURES) {
+        await storage.emailDeleteOtpsForEmail(emailHash);
+        clearOtpFailures(emailHash);
+        request.log.warn({ email_hash: emailHash }, 'OTP failure lockout — all outstanding codes invalidated');
+        return reply.status(429).send({ error: 'Too many failed attempts. Request a new code.' });
+      }
+      return reply.status(401).send({ error: 'Invalid or expired code' });
+    }
 
     await storage.emailMarkOtpUsed(hashToken(code));
+    // Success: invalidate any sibling codes and clear the failure counter.
+    await storage.emailDeleteOtpsForEmail(emailHash);
+    clearOtpFailures(emailHash);
 
     const account = await storage.emailGetAccount(tokenRow.email_hash);
     if (!account) {
@@ -234,14 +263,16 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
           email: { type: 'string', maxLength: 254 },
           nsec: { type: 'string', maxLength: 128 },
           username: { type: 'string', maxLength: 64 },
+          code: { type: 'string', maxLength: 32 },
         },
       },
     },
   }, async (request, reply) => {
-    const { email: rawEmail, nsec, username } = request.body as {
+    const { email: rawEmail, nsec, username, code } = request.body as {
       email?: string;
       nsec?: string;
       username?: string;
+      code?: string;
     };
     if (!rawEmail || !nsec || !username) {
       return reply.status(400).send({ error: 'email, nsec, and username are required' });
@@ -266,8 +297,27 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
       if (existing.pubkey === pubkey) {
         return reply.send({ registered: true, pubkey }); // idempotent
       }
-      return reply.status(409).send({ error: 'Email already registered with a different key' });
+      return reply.status(409).send({
+        error: 'Email already registered with a different key — log in with the OTP code and link your key through the authenticated account-link flow',
+      });
     }
+
+    // HIGH-1 FIX: proof of inbox ownership is REQUIRED before binding an
+    // email to a caller-supplied key. Without this, an attacker could
+    // pre-register a victim's email with the attacker's nsec; the victim's
+    // later OTP login would then issue a session for the ATTACKER's pubkey.
+    // (The idempotent same-key path above needs no code: the caller already
+    // proved key control by presenting the account's own nsec.)
+    if (!code || !/^\d{6}$/.test(code)) {
+      return reply.status(400).send({ error: 'A valid 6-digit code is required to bind this email — request one via /auth/email/request first' });
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    const tokenRow = await storage.emailGetValidOtp(hashToken(code), emailHash, nowSec);
+    if (!tokenRow) {
+      return reply.status(401).send({ error: 'Invalid or expired code — request one via /auth/email/request first' });
+    }
+    await storage.emailMarkOtpUsed(hashToken(code));
+    await storage.emailDeleteOtpsForEmail(emailHash);
 
     let encrypted: { ciphertext: string; salt: string; iv: string } | undefined;
     if (opts.nsecEncryptionKey) {
