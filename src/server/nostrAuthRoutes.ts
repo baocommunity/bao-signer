@@ -62,11 +62,8 @@ export async function nostrAuthRoutes(app: FastifyInstance, opts: NostrAuthOptio
       return reply.status(401).send({ error: { code: 'INVALID_NIP98_BINDING', message: 'NIP-98 u/method tags do not match this endpoint' } });
     }
 
-    const challengeResult = validateNip98Challenge(event as { tags?: unknown[] });
-    if (!challengeResult.valid) {
-      return reply.status(401).send({ error: { code: 'INVALID_CHALLENGE', message: challengeResult.error || 'Challenge validation failed' } });
-    }
-
+    // Verify the signature BEFORE consuming the single-use challenge: an
+    // invalid event must not burn a valid challenge (challenge-burn DoS).
     let valid = false;
     try {
       valid = verifyEvent(event as Parameters<typeof verifyEvent>[0]);
@@ -77,21 +74,26 @@ export async function nostrAuthRoutes(app: FastifyInstance, opts: NostrAuthOptio
       return reply.status(401).send({ error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' } });
     }
 
+    const challengeResult = validateNip98Challenge(event as { tags?: unknown[] });
+    if (!challengeResult.valid) {
+      return reply.status(401).send({ error: { code: 'INVALID_CHALLENGE', message: challengeResult.error || 'Challenge validation failed' } });
+    }
+
     const pubkey = event.pubkey as string;
     const token = `bao_sess_${randomBytes(32).toString('hex')}`;
 
     try {
-      const existing = await storage.getAccount(pubkey);
-      if (!existing) {
-        await storage.upsertAccount({
-          pubkey,
-          nsec_hash: createHash('sha256').update(`nostr:${pubkey}`).digest('hex'),
-          npub: nip19.npubEncode(pubkey),
-          username: `Nostr ${pubkey.slice(0, 8)}`,
-          nostr_only_mode: 1,
-          now,
-        });
-      }
+      // Upsert (not insert-only): an existing account — e.g. one first seen
+      // via guest auth — must be marked nostr-only and have its npub + last
+      // login refreshed, without clobbering its username or nsec_hash.
+      await storage.upsertAccount({
+        pubkey,
+        nsec_hash: createHash('sha256').update(`nostr:${pubkey}`).digest('hex'),
+        npub: nip19.npubEncode(pubkey),
+        username: `Nostr ${pubkey.slice(0, 8)}`,
+        nostr_only_mode: 1,
+        now,
+      });
 
       await storage.storeSession(token, pubkey, {
         userAgent: request.headers['user-agent'] || 'unknown',

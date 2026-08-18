@@ -67,6 +67,14 @@ export interface EmailAuthOptions {
   rateLimit?: { max: number; timeWindow: string };
   /** Dev only: log OTP codes (masked) so flows can be tested without email. */
   logOtpCodes?: boolean;
+  /**
+   * When false, the email flow will NEVER generate a key on the server.
+   * `/request` only sends a code; accounts are created exclusively by
+   * `/register` (which binds a client-supplied nsec after OTP proof), and
+   * `/verify` signs the user into an already-bound account. Default true for
+   * backward compatibility.
+   */
+  allowServerKeyGeneration?: boolean;
 }
 
 export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptions): Promise<void> {
@@ -76,6 +84,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
   const storage = opts.storage;
   const rateLimit = opts.rateLimit ?? { max: 50, timeWindow: '1 minute' };
   const ttl = Math.max(opts.sessionTtlSeconds ?? 86400, MIN_SESSION_TTL_SECONDS);
+  const allowMint = opts.allowServerKeyGeneration ?? true;
 
   const relayBackupKeyFor = (email: string): string =>
     createHmac('sha256', opts.backupSecret).update(`email:${email}`).digest('hex').slice(0, 32);
@@ -124,9 +133,10 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
       return reply.status(429).send({ error: 'Too many login attempts. Please try again later.' });
     }
 
-    // Auto-create account if the email is new
+    // Auto-create account if the email is new (self-custody mode skips this:
+    // the account must be created client-side and bound via /register).
     const existing = await storage.emailGetAccount(emailHash);
-    if (!existing) {
+    if (!existing && allowMint) {
       const secretKeyBytes = generateSecretKey();
       const pubkey = getPublicKey(secretKeyBytes);
       const nsecHex = bytesToHex(secretKeyBytes);
@@ -219,6 +229,11 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
 
     const account = await storage.emailGetAccount(tokenRow.email_hash);
     if (!account) {
+      if (!allowMint) {
+        return reply.status(404).send({
+          error: { code: 'ACCOUNT_NOT_FOUND', message: 'No account is bound to this email. Register your key first.' },
+        });
+      }
       request.log.error({ email_hash: tokenRow.email_hash }, 'Account not found for valid OTP');
       return reply.status(500).send({ error: { code: 'ACCOUNT_NOT_FOUND', message: 'Account not found' } });
     }
@@ -320,11 +335,15 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
     await storage.emailDeleteOtpsForEmail(emailHash);
 
     let encrypted: { ciphertext: string; salt: string; iv: string } | undefined;
-    if (opts.nsecEncryptionKey) {
+    // Self-custody mode never persists a host-recoverable nsec backup: the
+    // user holds the seed/passkey, so the server must not retain a copy it
+    // could later decrypt. The encrypted backup is only for server-minted
+    // accounts in the default (mint) mode.
+    if (opts.nsecEncryptionKey && allowMint) {
       encrypted = encryptNsec(nsec, opts.nsecEncryptionKey);
     }
 
-    await storage.emailInsertAccount({
+    const inserted = await storage.emailInsertAccount({
       email_hash: emailHash,
       pubkey,
       username,
@@ -332,6 +351,13 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
       nsec_salt: encrypted?.salt,
       nsec_iv: encrypted?.iv,
     });
+    if (inserted) {
+      // Mirror the /request auto-create path: the account must also exist in
+      // the main accounts + auth-methods tables so passkey-linking and other
+      // flows can resolve it (prevents an orphaned email account).
+      await storage.insertAccount({ pubkey, nsec_hash: computeNsecHash(bytesToHex(decoded.data)), username, now: nowSec });
+      await storage.insertAuthMethod({ method: 'email', authId: emailHash, pubkey, now: nowSec });
+    }
 
     request.log.info({ email_hash: emailHash, pubkey: pubkey.slice(0, 8) }, 'Email account registered with existing key');
     return reply.send({ registered: true, pubkey });

@@ -72,12 +72,15 @@ export class BrowserPasskeyPrfProvider {
         typeof window.PublicKeyCredential.getClientCapabilities === "function"
       ) {
         const caps = await window.PublicKeyCredential.getClientCapabilities();
-        if (caps.prf === true) {
-          return true;
+        if (caps && typeof caps === "object") {
+          // Authoritative for PRF support: a platform authenticator existing
+          // does NOT imply PRF, so trust the reported capability instead of
+          // falling through to the weaker platform-authenticator heuristic.
+          return caps.prf === true;
         }
       }
     } catch {
-      // Fallback below
+      // Fall through to the legacy heuristic below
     }
 
     try {

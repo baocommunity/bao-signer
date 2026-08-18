@@ -8,8 +8,9 @@
  * - email/telegram: the server derives the account; the nsec is shown once
  */
 
-import { finalizeEvent, type EventTemplate, type NostrEvent } from "nostr-tools";
+import { finalizeEvent, type EventTemplate, type NostrEvent, nip19 } from "nostr-tools";
 import { getSignerApiBase } from "./config.ts";
+import { newSeedPhrase, createSeedIdentitySigner } from "./seedIdentity.ts";
 
 export interface AuthSession {
   pubkey: string;
@@ -215,4 +216,56 @@ export async function telegramWidgetVerify(
     throw new Error(err.error ?? `Telegram verify failed (${res.status})`);
   }
   return (await res.json()) as { session: AuthSession };
+}
+
+/* ── Self-custody onboarding ─────────────────────────────────── */
+
+/**
+ * Create a fully self-custodial identity: a fresh 24-word BIP-39 seed phrase
+ * derives the Nostr key entirely on the client — the server never sees or
+ * generates the key. The returned `nsec` + `phrase` are the user's recovery
+ * material (save once, then bind email/passkey via the register/link flows).
+ */
+export function createSelfCustodyAccount(): {
+  phrase: string;
+  pubkey: string;
+  npub: string;
+  nsec: string;
+  signer: ReturnType<typeof createSeedIdentitySigner>;
+} {
+  const phrase = newSeedPhrase(256);
+  const identity = createSeedIdentitySigner(phrase);
+  return {
+    phrase,
+    pubkey: identity.pubkey,
+    npub: nip19.npubEncode(identity.pubkey),
+    nsec: identity.nsec,
+    signer: identity,
+  };
+}
+
+/**
+ * Bind a client-generated key to an email (the self-custody onboarding path).
+ * Requires an OTP from {@link emailRequestOtp}. Use with a server configured
+ * with `allowServerKeyGeneration: false`: it stores only `email → pubkey` and
+ * never mints or retains a copy of the nsec.
+ */
+export async function emailRegisterKey(opts: {
+  email: string;
+  nsec: string;
+  username: string;
+  code: string;
+  apiBaseUrl?: string;
+}): Promise<{ registered: boolean; pubkey: string }> {
+  const base = getSignerApiBase(opts.apiBaseUrl);
+  const res = await fetch(`${base}/v1/auth/email/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: opts.email, nsec: opts.nsec, username: opts.username, code: opts.code }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Email register failed (${res.status})`);
+  }
+  return (await res.json()) as { registered: boolean; pubkey: string };
 }

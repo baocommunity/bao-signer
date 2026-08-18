@@ -30,6 +30,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
+    "preview": "node examples/preview.mjs",
     "prepublishOnly": "npm run build",
     "prepare": "npm run build"
   },

@@ -10,7 +10,7 @@ import { MemorySignerStorage } from "../../src/server/storage.ts";
 const BOT_TOKEN = "test-bot-token";
 const SECRET = "telegram-test-secret";
 
-async function buildApp(opts: { withOidc?: boolean } = {}) {
+async function buildApp(opts: { withOidc?: boolean; noMint?: boolean } = {}) {
   const app = Fastify({ logger: false });
   const storage = new MemorySignerStorage();
   await app.register(telegramAuthRoutes, {
@@ -21,6 +21,7 @@ async function buildApp(opts: { withOidc?: boolean } = {}) {
     ...(opts.withOidc
       ? { clientId: "cid", clientSecret: "csecret", redirectUri: "http://localhost/cb" }
       : {}),
+    ...(opts.noMint ? { allowServerKeyGeneration: false } : {}),
   });
   return { app, storage };
 }
@@ -59,6 +60,7 @@ describe("telegram widget verify", () => {
     expect(session.isNewAccount).toBe(true);
     expect(session.authMethod).toBe("telegram");
     expect(session.relayBackupKey).toMatch(/^[0-9a-f]{32}$/);
+    expect(session.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
   it("returns the same account on second login, without nsec", async () => {
@@ -85,6 +87,13 @@ describe("telegram widget verify", () => {
     const res = await app.inject({ method: "POST", url: "/auth/telegram/verify", payload: data });
     expect(res.statusCode).toBe(401);
     expect(res.json().error).toMatch(/expired/i);
+  });
+
+  it("self-custody mode: unknown user is refused (403) instead of minted a key", async () => {
+    const { app } = await buildApp({ noMint: true });
+    const res = await app.inject({ method: "POST", url: "/auth/telegram/verify", payload: makeWidgetData() });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/account creation is disabled/i);
   });
 
   it("does not store telegram PII — only the derived auth id", async () => {
