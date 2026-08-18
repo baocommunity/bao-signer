@@ -11,8 +11,9 @@
  *   --bao-accent, --bao-ink, --bao-muted, --bao-paper, --bao-rule,
  *   --bao-danger, --bao-success, --bao-font-mono, --bao-font-serif
  */
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createLoginFlow, type LoginResult } from "../client/loginFlowMachine.ts";
+import { isNip07Available } from "../client/nip07.ts";
 
 export interface BaoLoginPanelProps {
   /** Called when login/register completes (with the method's session). */
@@ -43,6 +44,30 @@ const btn = (kind: "primary" | "outline" | "disabled"): React.CSSProperties => (
 
 export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }: BaoLoginPanelProps): React.ReactElement {
   const flow = useMemo(() => createLoginFlow(), []);
+
+  // Extensions inject window.nostr ASYNCHRONOUSLY (often after first paint).
+  // Checking once at mount hides the extension button forever — poll briefly
+  // and re-check on window focus so the button appears without a reload.
+  const [extAvail, setExtAvail] = useState(flow.nip07Available);
+  useEffect(() => {
+    if (extAvail) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      tries++;
+      if (isNip07Available()) {
+        setExtAvail(true);
+        clearInterval(t);
+      } else if (tries >= 20) {
+        clearInterval(t); // give up after ~10s
+      }
+    }, 500);
+    const onFocus = () => { if (isNip07Available()) setExtAvail(true); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [extAvail]);
   const [mode, setMode] = useState<"signin" | "register">("signin");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +221,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {flow.nip07Available ? (
+          {extAvail ? (
             <button
               type="button"
               onClick={() => void run(flow.loginNip07)}
