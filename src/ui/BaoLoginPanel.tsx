@@ -123,7 +123,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
           <button
             type="button"
             disabled={!downloaded}
-            onClick={() => onDone(pending.result)}
+            onClick={() => onDone({ ...pending.result, backupCompleted: true, phrase: pending.phrase })}
             style={downloaded ? btn("outline") : btn("disabled")}
           >
             Enter the app
@@ -144,7 +144,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
             <button
               type="button"
               disabled={!paper}
-              onClick={() => onDone(pending.result)}
+              onClick={() => onDone({ ...pending.result, backupCompleted: false, phrase: pending.phrase })}
               style={{ ...btn(paper ? "outline" : "disabled"), marginTop: 8, fontSize: 10 }}
             >
               Enter with paper backup

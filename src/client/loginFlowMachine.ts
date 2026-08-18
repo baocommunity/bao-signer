@@ -36,6 +36,11 @@ export interface LoginResult {
   session: unknown;
   /** Present only for seed-phrase registration — the backup file text. */
   backupFileText?: string;
+  /** Registration: true when the user downloaded the backup file (false =
+   * paper path — the app should keep the backup reminder pending). */
+  backupCompleted?: boolean;
+  /** Registration: the 24-word phrase (handle with care, clear after use). */
+  phrase?: string;
 }
 
 export interface FlowDeps {
