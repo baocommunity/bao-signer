@@ -41,6 +41,8 @@ export interface LoginResult {
   backupCompleted?: boolean;
   /** Registration: the 24-word phrase (handle with care, clear after use). */
   phrase?: string;
+  /** NIP-46: the bunker URL used (apps may persist it for session restore). */
+  bunkerUrl?: string;
 }
 
 export interface FlowDeps {
@@ -81,7 +83,7 @@ export function createLoginFlow(deps: FlowDeps = {}): Machine {
 
     async loginNip46(bunkerUrl: string): Promise<LoginResult> {
       const session = await connectNip46Signer(bunkerUrl.trim());
-      return { method: "nip46", pubkey: session.pubkey, session };
+      return { method: "nip46", pubkey: session.pubkey, session, bunkerUrl: bunkerUrl.trim() };
     },
 
     async loginSeed(input: string): Promise<LoginResult> {
