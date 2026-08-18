@@ -78,13 +78,10 @@ export async function guestAuthRoutes(app: FastifyInstance, opts: GuestAuthOptio
       });
     }
 
-    // 4. Server challenge — prevents pre-signed replay
-    const challengeResult = validateNip98Challenge(event as { tags?: unknown[] });
-    if (!challengeResult.valid) {
-      return reply.status(401).send({ error: { code: 'INVALID_CHALLENGE', message: challengeResult.error || 'Challenge validation failed' } });
-    }
-
-    // 5. Signature — proves key ownership
+    // 4. Signature — proves key ownership. Verified BEFORE the single-use
+    // challenge is consumed: an invalid event must not burn a valid challenge,
+    // otherwise an attacker could DoS a victim's in-flight login by racing
+    // with a garbage event that reuses the same challenge.
     let valid = false;
     try {
       valid = verifyEvent(event as Parameters<typeof verifyEvent>[0]);
@@ -95,6 +92,12 @@ export async function guestAuthRoutes(app: FastifyInstance, opts: GuestAuthOptio
       return reply.status(401).send({
         error: { code: 'INVALID_SIGNATURE', message: 'Event signature verification failed' },
       });
+    }
+
+    // 5. Server challenge — prevents pre-signed replay (single use)
+    const challengeResult = validateNip98Challenge(event as { tags?: unknown[] });
+    if (!challengeResult.valid) {
+      return reply.status(401).send({ error: { code: 'INVALID_CHALLENGE', message: challengeResult.error || 'Challenge validation failed' } });
     }
 
     const pubkey = event.pubkey as string;

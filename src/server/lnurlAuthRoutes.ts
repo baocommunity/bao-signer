@@ -93,6 +93,12 @@ export interface LnurlAuthOptions {
   secret: string;
   sessionTtlSeconds?: number;
   rateLimit?: { max: number; timeWindow: string };
+  /**
+   * When false, LNURL-auth can only sign in an already-known wallet — it will
+   * NEVER generate a Nostr key. Unknown wallets get `status: ERROR`. Default
+   * true for backward compatibility.
+   */
+  allowServerKeyGeneration?: boolean;
 }
 
 export async function lnurlAuthRoutes(app: FastifyInstance, opts: LnurlAuthOptions): Promise<void> {
@@ -102,6 +108,7 @@ export async function lnurlAuthRoutes(app: FastifyInstance, opts: LnurlAuthOptio
   const storage = opts.storage;
   const rateLimit = opts.rateLimit ?? { max: 50, timeWindow: '1 minute' };
   const ttl = Math.max(opts.sessionTtlSeconds ?? 86400, 3600);
+  const allowMint = opts.allowServerKeyGeneration ?? true;
   const callbackBase = opts.publicBaseUrl.replace(/\/+$/, '');
 
   /** Non-reversible auth id for a wallet linking key. */
@@ -158,15 +165,28 @@ export async function lnurlAuthRoutes(app: FastifyInstance, opts: LnurlAuthOptio
     let isNewAccount = false;
     if (existingMethod) {
       pubkey = existingMethod.pubkey;
+    } else if (!allowMint) {
+      return sendError('Account creation disabled');
     } else {
       const nsecBytes = generateSecretKey();
       const nsecHex = bytesToHex(nsecBytes);
-      pubkey = getPublicKey(nsecBytes);
+      const candidatePubkey = getPublicKey(nsecBytes);
       const username = 'user_' + randomBytes(4).toString('hex');
-      await storage.insertAccount({ pubkey, nsec_hash: computeNsecHash(nsecHex), username, now });
-      await storage.insertAuthMethod({ method: 'lightning', authId, pubkey, now });
-      holdNsec(k1, nsecHex, nip19.nsecEncode(nsecBytes));
-      isNewAccount = true;
+
+      // Account first (the auth-method row references it via FK), then claim
+      // the auth id atomically — see telegram resolveAccount. Concurrent first
+      // logins for the same wallet must not mint two identities.
+      await storage.insertAccount({ pubkey: candidatePubkey, nsec_hash: computeNsecHash(nsecHex), username, now });
+
+      const claimed = await storage.insertAuthMethodIfAbsent({ method: 'lightning', authId, pubkey: candidatePubkey, now });
+      if (claimed) {
+        holdNsec(k1, nsecHex, nip19.nsecEncode(nsecBytes));
+        pubkey = candidatePubkey;
+        isNewAccount = true;
+      } else {
+        const canonical = await storage.findAuthMethod('lightning', authId);
+        pubkey = canonical?.pubkey ?? candidatePubkey;
+      }
     }
 
     // Mint the session up front so its hash lands on the challenge row; the
@@ -261,6 +281,7 @@ export async function lnurlAuthRoutes(app: FastifyInstance, opts: LnurlAuthOptio
         linkedMethods: methods.map((m) => m.method),
         relayBackupKey,
         sessionToken,
+        expires_at: now + ttl,
       },
     });
   });

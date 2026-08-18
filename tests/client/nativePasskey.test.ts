@@ -9,8 +9,9 @@
  *  2. isCancelError distinguishes user-cancel (NotAllowedError/AbortError)
  *     from genuine capability failures so unlock errors are reported honestly.
  */
-import { describe, expect, it } from "vitest";
-import { extractPrfSeed, isCancelError } from "../../src/client/nativePasskey.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { extractPrfSeed, isCancelError, isPrfAvailable } from "../../src/client/nativePasskey.ts";
+import { BrowserPasskeyPrfProvider } from "../../src/client/prf.ts";
 
 describe("extractPrfSeed", () => {
   const seed = new Uint8Array(32).fill(7);
@@ -73,5 +74,48 @@ describe("isCancelError", () => {
     expect(isCancelError(new Error("PRF result not available"))).toBe(false);
     expect(isCancelError("NotAllowedError")).toBe(false);
     expect(isCancelError(null)).toBe(false);
+  });
+});
+
+describe("isPrfAvailable capability detection", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reports true when getClientCapabilities says prf is supported", async () => {
+    vi.stubGlobal("window", {
+      PublicKeyCredential: {
+        getClientCapabilities: async () => ({ prf: true }),
+      },
+    });
+    expect(await isPrfAvailable()).toBe(true);
+  });
+
+  it("does NOT over-report: prf:false wins even when a platform authenticator exists", async () => {
+    vi.stubGlobal("window", {
+      PublicKeyCredential: {
+        getClientCapabilities: async () => ({ prf: false }),
+        isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+      },
+    });
+    expect(await isPrfAvailable()).toBe(false);
+  });
+
+  it("falls back to the platform heuristic only when getClientCapabilities is unavailable", async () => {
+    vi.stubGlobal("window", {
+      PublicKeyCredential: {
+        isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+      },
+    });
+    expect(await isPrfAvailable()).toBe(true);
+  });
+
+  it("BrowserPasskeyPrfProvider applies the same honest capability check", async () => {
+    vi.stubGlobal("window", {
+      PublicKeyCredential: {
+        getClientCapabilities: async () => ({ prf: false }),
+        isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+      },
+    });
+    const provider = new BrowserPasskeyPrfProvider();
+    expect(await provider.isPrfAvailable()).toBe(false);
   });
 });

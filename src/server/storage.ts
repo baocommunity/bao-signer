@@ -111,6 +111,14 @@ export interface SignerStorage {
   insertAccount(row: AccountInsert): Promise<void>;
   upsertAccount(row: AccountInsert): Promise<void>;
   insertAuthMethod(row: AuthMethodInsert): Promise<void>;
+  /**
+   * Insert an auth method only if the (method, authId) pair is absent.
+   * Returns true when this call performed the insert (i.e. this caller
+   * "won" the claim). Find-or-create flows use this as their idempotency
+   * gate so concurrent first logins cannot mint two identities for the
+   * same auth id.
+   */
+  insertAuthMethodIfAbsent(row: AuthMethodInsert): Promise<boolean>;
   insertCredential(row: CredentialInsert): Promise<void>;
   updateCredentialCounter(credentialId: string, counter: number, now: number): Promise<void>;
   touchAuthMethod(method: string, authId: string, now: number): Promise<void>;
@@ -188,9 +196,21 @@ export class MemorySignerStorage implements SignerStorage {
     const existing = this.accounts.get(row.pubkey);
     if (existing) {
       existing.last_login_at = row.now;
+      // npub is deterministic from the pubkey — always safe to fill/refresh.
+      if (row.npub) existing.npub = row.npub;
+      // nostr-only is monotonic: once 1 (server never held the nsec), never
+      // downgrade it on a later guest-style login.
+      if (row.nostr_only_mode === 1) existing.nostr_only_mode = 1;
       return;
     }
     await this.insertAccount(row);
+  }
+
+  async insertAuthMethodIfAbsent(row: AuthMethodInsert): Promise<boolean> {
+    const key = `${row.method}:${row.authId}`;
+    if (this.authMethods.has(key)) return false;
+    this.authMethods.set(key, { method: row.method, authId: row.authId, pubkey: row.pubkey, last_used_at: row.now });
+    return true;
   }
 
   async insertAuthMethod(row: AuthMethodInsert): Promise<void> {

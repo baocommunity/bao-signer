@@ -349,6 +349,23 @@ export class Nip46Client {
     if (this.remotePubkey && normalizePubkey(parsed.pubkey as string) !== normalizePubkey(this.remotePubkey)) {
       throw new Error("Remote signer returned event signed with unexpected pubkey");
     }
+
+    // Signature verification proves WHO signed the event, not WHAT was signed.
+    // Confirm the returned event matches the template we asked the signer to
+    // sign — otherwise a misbehaving remote signer could hand back a
+    // validly-signed DIFFERENT event (wrong kind/content/tags) that callers
+    // would then publish as if it were their own.
+    if (
+      parsed.kind !== template.kind ||
+      parsed.created_at !== template.created_at ||
+      parsed.content !== template.content ||
+      normalizePubkey(parsed.pubkey as string) !== normalizePubkey(template.pubkey) ||
+      JSON.stringify(parsed.tags) !== JSON.stringify(template.tags)
+    ) {
+      throw new Error(
+        "Remote signer returned an event that does not match the requested template",
+      );
+    }
     return parsed as unknown as Event;
   }
 

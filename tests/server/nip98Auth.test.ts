@@ -115,6 +115,22 @@ describe("POST /auth/guest", () => {
     const res = await app.inject({ method: "POST", url: "/auth/guest", payload: { event } });
     expect(res.statusCode).toBe(401);
   });
+
+  it("does not consume the single-use challenge when the signature is invalid", async () => {
+    const sk = generateSecretKey();
+    const challenge = await getChallenge(app);
+    const event = signEvent(sk, "/auth/guest", challenge);
+
+    // An invalid-signature attempt must not burn the challenge.
+    const tampered = { ...event, sig: "ff".repeat(64) };
+    const bad = await app.inject({ method: "POST", url: "/auth/guest", payload: { event: tampered } });
+    expect(bad.statusCode).toBe(401);
+    expect(bad.json().error.code).toBe("INVALID_SIGNATURE");
+
+    // The SAME challenge still works for the real, validly-signed event.
+    const good = await app.inject({ method: "POST", url: "/auth/guest", payload: { event } });
+    expect(good.statusCode).toBe(201);
+  });
 });
 
 describe("POST /auth/nostr", () => {
@@ -135,5 +151,44 @@ describe("POST /auth/nostr", () => {
     expect(body.sessionToken).toMatch(/^bao_sess_/);
     expect(body.expires_at - Math.floor(Date.now() / 1000)).toBeGreaterThan(29 * 24 * 3600);
     expect(await storage.getAccount(getPublicKey(sk))).toBeTruthy();
+  });
+
+  it("does not consume the single-use challenge when the signature is invalid", async () => {
+    const sk = generateSecretKey();
+    const challenge = await getChallenge(app);
+    const event = signEvent(sk, "/auth/nostr", challenge);
+
+    const tampered = { ...event, sig: "ff".repeat(64) };
+    const bad = await app.inject({ method: "POST", url: "/auth/nostr", payload: { event: tampered } });
+    expect(bad.statusCode).toBe(401);
+    expect(bad.json().error.code).toBe("INVALID_SIGNATURE");
+
+    const good = await app.inject({ method: "POST", url: "/auth/nostr", payload: { event } });
+    expect(good.statusCode).toBe(201);
+  });
+
+  it("upgrades a guest account to nostr-only without clobbering its username", async () => {
+    const sk = generateSecretKey();
+    const pk = getPublicKey(sk);
+
+    // First seen as a guest (nostr_only_mode 0).
+    const c1 = await getChallenge(app);
+    const guestEvent = signEvent(sk, "/auth/guest", c1);
+    const guest = await app.inject({ method: "POST", url: "/auth/guest", payload: { event: guestEvent } });
+    expect(guest.statusCode).toBe(201);
+
+    const internal = storage as unknown as { accounts: Map<string, Record<string, unknown>> };
+    const before = internal.accounts.get(pk)!;
+    expect(before.nostr_only_mode).toBe(0);
+
+    // Later logs in via Nostr with the same key.
+    const c2 = await getChallenge(app);
+    const nostrEvent = signEvent(sk, "/auth/nostr", c2);
+    const nostr = await app.inject({ method: "POST", url: "/auth/nostr", payload: { event: nostrEvent } });
+    expect(nostr.statusCode).toBe(201);
+
+    const after = internal.accounts.get(pk)!;
+    expect(after.nostr_only_mode).toBe(1); // upgraded
+    expect(after.username).toBe(before.username); // placeholder not clobbered
   });
 });

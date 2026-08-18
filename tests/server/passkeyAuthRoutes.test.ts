@@ -26,7 +26,7 @@ import { untrustedPasskeyRegistrationError } from "../../src/server/passkeyAuthR
 
 const SECRET = "test-backup-secret";
 
-async function buildApp(opts: { withAuth?: boolean } = {}) {
+async function buildApp(opts: { withAuth?: boolean; noMint?: boolean } = {}) {
   const app = Fastify({ logger: false });
   const storage = new MemorySignerStorage();
   await app.register(baoSignerAuthRoutes, {
@@ -43,6 +43,7 @@ async function buildApp(opts: { withAuth?: boolean } = {}) {
           },
         }
       : {}),
+    ...(opts.noMint ? { allowServerKeyGeneration: false } : {}),
   });
   return { app, storage };
 }
@@ -145,6 +146,24 @@ describe("POST /auth/passkey/register", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe("PASSKEY_CHALLENGE_NOT_FOUND");
+  });
+
+  it("self-custody mode: rejects anonymous server-key registration (403)", async () => {
+    const { app } = await buildApp({ noMint: true });
+    const { challengeId } = await getRegisterOptions(app);
+    verifiedRegistration();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/passkey/register",
+      payload: {
+        challengeId,
+        credential: { id: "cred-1", type: "public-key", response: {} },
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("ACCOUNT_CREATION_DISABLED");
   });
 
   it("rejects duplicate credential registration", async () => {

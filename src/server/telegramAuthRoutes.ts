@@ -27,6 +27,7 @@ import type { SignerStorage } from './storage.ts';
 
 const MAX_AUTH_AGE_SECONDS = 5 * 60;
 const OIDC_CHALLENGE_TTL = 10 * 60;
+const ERR_ACCOUNT_CREATION_DISABLED = 'ACCOUNT_CREATION_DISABLED';
 const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
 const TELEGRAM_JWKS = createRemoteJWKSet(
   new URL('https://oauth.telegram.org/.well-known/jwks.json'),
@@ -68,6 +69,12 @@ export interface TelegramAuthOptions {
   backupSecret: string;
   sessionTtlSeconds?: number;
   rateLimit?: { max: number; timeWindow: string };
+  /**
+   * When false, Telegram can only sign in an already-known user — it will
+   * NEVER generate a Nostr key. Unknown users get a 403 (widget) or an
+   * `account_creation_disabled` redirect (QR). Default true.
+   */
+  allowServerKeyGeneration?: boolean;
 }
 
 export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAuthOptions): Promise<void> {
@@ -77,6 +84,7 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
   const rateLimit = opts.rateLimit ?? { max: 50, timeWindow: '1 minute' };
   const ttl = Math.max(opts.sessionTtlSeconds ?? 86400, 3600);
   const frontendBase = opts.frontendBase ?? '/';
+  const allowMint = opts.allowServerKeyGeneration ?? true;
 
   /** Stable non-reversible auth id from a Telegram user id. */
   const deriveAuthId = (telegramId: string): string => {
@@ -91,6 +99,7 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
   async function resolveAccount(authId: string, holdKey: string): Promise<{ pubkey: string; isNewAccount: boolean }> {
     const existing = await storage.findAuthMethod('telegram', authId);
     if (existing) return { pubkey: existing.pubkey, isNewAccount: false };
+    if (!allowMint) throw new Error(ERR_ACCOUNT_CREATION_DISABLED);
 
     const nsecBytes = generateSecretKey();
     const nsecHex = bytesToHex(nsecBytes);
@@ -98,8 +107,19 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
     const username = 'user_' + randomBytes(4).toString('hex');
     const now = Math.floor(Date.now() / 1000);
 
+    // Create the account first (the auth-method row references it via FK in
+    // the reference schema), then claim the auth id atomically. Exactly one
+    // caller of concurrent first logins wins the claim; losers adopt the
+    // winner's pubkey instead of minting a second identity whose held nsec
+    // would no longer match the account.
     await storage.insertAccount({ pubkey, nsec_hash: computeNsecHash(nsecHex), username, now });
-    await storage.insertAuthMethod({ method: 'telegram', authId, pubkey, now });
+
+    const claimed = await storage.insertAuthMethodIfAbsent({ method: 'telegram', authId, pubkey, now });
+    if (!claimed) {
+      const canonical = await storage.findAuthMethod('telegram', authId);
+      return { pubkey: canonical?.pubkey ?? pubkey, isNewAccount: false };
+    }
+
     holdNsec(holdKey, nsecHex, nip19.nsecEncode(nsecBytes));
     return { pubkey, isNewAccount: true };
   }
@@ -217,7 +237,16 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
     }
 
     const authId = deriveAuthId(telegramId);
-    const { pubkey, isNewAccount } = await resolveAccount(authId, state);
+    let pubkey: string;
+    let isNewAccount: boolean;
+    try {
+      ({ pubkey, isNewAccount } = await resolveAccount(authId, state));
+    } catch (err) {
+      if (err instanceof Error && err.message === ERR_ACCOUNT_CREATION_DISABLED) {
+        return reply.redirect(`${frontendBase}?tg_error=account_creation_disabled`);
+      }
+      throw err;
+    }
     await storage.tgMarkAuthenticated(state, { authId, pubkey, isNewAccount });
 
     return reply.redirect(`${frontendBase}?tg_done=${state}`);
@@ -283,6 +312,7 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
         linkedMethods: methods.map((m) => m.method),
         relayBackupKey: consumed.auth_id ? relayBackupKeyFor(consumed.auth_id) : '',
         sessionToken,
+        expires_at: now + ttl,
       },
     });
   });
@@ -354,7 +384,16 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
 
     // PII discarded after this point — only the opaque auth_id is used
     const authId = deriveAuthId(String(body.id));
-    const { pubkey, isNewAccount } = await resolveAccount(authId, authId);
+    let pubkey: string;
+    let isNewAccount: boolean;
+    try {
+      ({ pubkey, isNewAccount } = await resolveAccount(authId, authId));
+    } catch (err) {
+      if (err instanceof Error && err.message === ERR_ACCOUNT_CREATION_DISABLED) {
+        return reply.status(403).send({ error: 'Account creation is disabled. Create a self-custodial identity first, then link Telegram.' });
+      }
+      throw err;
+    }
 
     const account = await storage.getAccount(pubkey);
     if (!account) {
@@ -382,6 +421,7 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
         linkedMethods: methods.map((m) => m.method),
         relayBackupKey: relayBackupKeyFor(authId),
         sessionToken,
+        expires_at: now + ttl,
       },
     });
   });

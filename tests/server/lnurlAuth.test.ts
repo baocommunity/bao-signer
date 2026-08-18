@@ -10,13 +10,14 @@ import { MemorySignerStorage } from "../../src/server/storage.ts";
 
 const SECRET = "lnurl-test-secret";
 
-async function buildApp() {
+async function buildApp(opts: { noMint?: boolean } = {}) {
   const app = Fastify({ logger: false });
   const storage = new MemorySignerStorage();
   await app.register(lnurlAuthRoutes, {
     storage,
     publicBaseUrl: "http://localhost/v1",
     secret: SECRET,
+    ...(opts.noMint ? { allowServerKeyGeneration: false } : {}),
   });
   return { app, storage };
 }
@@ -71,6 +72,7 @@ describe("LNURL-auth", () => {
     expect(body.session.isNewAccount).toBe(true);
     expect(body.session.nsec).toMatch(/^nsec1/); // shown once
     expect(body.session.relayBackupKey).toMatch(/^[0-9a-f]{32}$/);
+    expect(body.session.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
   it("returning wallet gets no nsec and is not a new account", async () => {
@@ -121,6 +123,19 @@ describe("LNURL-auth", () => {
   it("rejects unknown k1 at poll", async () => {
     const res = await app.inject({ method: "GET", url: `/auth/lnurl/poll?k1=${"ab".repeat(32)}` });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("self-custody mode: unknown wallet gets ERROR instead of a minted key", async () => {
+    const { app } = await buildApp({ noMint: true });
+    const { k1 } = await startChallenge(app);
+    const wallet = makeWallet();
+    const sig = signK1(wallet.privKey, k1);
+    const cb = await app.inject({
+      method: "GET",
+      url: `/auth/lnurl/callback?tag=login&k1=${k1}&sig=${sig}&key=${wallet.pubKeyHex}`,
+    });
+    expect(cb.json().status).toBe("ERROR");
+    expect(cb.json().reason).toMatch(/account creation disabled/i);
   });
 
   it("fails closed without a secret", async () => {

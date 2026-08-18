@@ -118,11 +118,19 @@ export async function isPrfAvailable(): Promise<boolean> {
 
   try {
     const caps = await (window.PublicKeyCredential as any).getClientCapabilities?.();
-    if (caps?.prf === true) return true;
+    if (caps && typeof caps === "object") {
+      // getClientCapabilities is authoritative for PRF support. The presence
+      // of a platform authenticator does NOT imply PRF, so when the browser
+      // reports capabilities we must trust them instead of falling through to
+      // the weaker platform-authenticator heuristic (which over-reports PRF).
+      return caps.prf === true;
+    }
   } catch {
-    /* fallback below */
+    /* fall through to legacy heuristic below */
   }
 
+  // Legacy browsers without getClientCapabilities: the platform-authenticator
+  // presence check is the only (best-effort) signal available.
   try {
     const available = await (window.PublicKeyCredential as any)
       .isUserVerifyingPlatformAuthenticatorAvailable?.();

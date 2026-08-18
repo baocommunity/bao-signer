@@ -67,6 +67,14 @@ export interface BaoSignerServerOptions {
    * Typically: read the Bearer token, look it up in your session store.
    */
   authenticate?: (request: FastifyRequest) => Promise<string | null>;
+  /**
+   * When false, the server will NEVER generate a Nostr key on a user's
+   * behalf. Anonymous `/auth/passkey/register` (the only server-key-minting
+   * path here) is rejected; passkeys can only be attached to an existing
+   * self-custodial account via the authenticated link endpoints. Default true
+   * for backward compatibility.
+   */
+  allowServerKeyGeneration?: boolean;
 }
 
 function generateChallengeId(): string {
@@ -101,6 +109,7 @@ export async function baoSignerAuthRoutes(
   const EXPECTED_ORIGINS = opts.expectedOrigins;
   const rateLimit = opts.rateLimit ?? { max: 50, timeWindow: '1 minute' };
   const ttl = opts.sessionTtlSeconds ?? 86400;
+  const allowMint = opts.allowServerKeyGeneration ?? true;
 
   const errorMeta = (request: FastifyRequest) => ({
     request_id: request.id,
@@ -240,6 +249,19 @@ export async function baoSignerAuthRoutes(
         error: {
           code: registrationError,
           message: 'A client-derived Nostr identity can only be linked from an authenticated account.',
+        },
+        meta: errorMeta(request),
+      });
+    }
+
+    // Self-custody mode: anonymous registration can only produce a
+    // server-generated key, which is exactly what we must not do. Direct users
+    // to a seed/passkey-derived identity and the authenticated link flow.
+    if (!allowMint) {
+      return reply.status(403).send({
+        error: {
+          code: 'ACCOUNT_CREATION_DISABLED',
+          message: 'Server-side key generation is disabled. Create a self-custodial identity (seed phrase) and link this passkey from the authenticated account.',
         },
         meta: errorMeta(request),
       });
