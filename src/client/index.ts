@@ -28,5 +28,7 @@ export * from "./keyStorage.ts";
 export * from "./signer.ts";
 export * from "./nip07.ts";
 export * from "./nip46.ts";
+export * from "./seedIdentity.ts";
+export * from "./loginFlowMachine.ts";
 export * from "./quickStart.ts";
 export * from "./loginFlows.ts";

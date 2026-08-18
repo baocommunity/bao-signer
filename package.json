@@ -1,6 +1,6 @@
 {
   "name": "bao-signer",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Passkey-first Nostr signing: WebAuthn PRF identity derivation, passkey-wrapped key storage, and a Fastify auth server.",
   "license": "MIT",
   "type": "module",
@@ -12,6 +12,10 @@
     "./server": {
       "types": "./dist/server/index.d.ts",
       "default": "./dist/server/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "default": "./dist/ui/index.js"
     }
   },
   "files": [
@@ -32,6 +36,7 @@
     "@noble/curves": "^2.3.0",
     "@noble/hashes": "^2.2.0",
     "@noble/secp256k1": "^3.0.0",
+    "@scure/bip39": "^2.3.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
     "bech32": "^2.0.0",
@@ -39,16 +44,24 @@
     "nostr-tools": "^2.23.3"
   },
   "peerDependencies": {
-    "fastify": "^5.0.0"
+    "fastify": "^5.0.0",
+    "react": "^18 || ^19"
   },
   "peerDependenciesMeta": {
     "fastify": {
+      "optional": true
+    },
+    "react": {
       "optional": true
     }
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "fastify": "^5.8.5",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^5.7.3",
     "vitest": "^4.1.2"
   },
