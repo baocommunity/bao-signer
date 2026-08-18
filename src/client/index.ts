@@ -13,6 +13,9 @@
  *                     (no server interaction).
  * - `derivedKeys`   — deterministic per-community key derivation
  *                     (HMAC-SHA256, scalar-validated).
+ * - `nip07`         — browser-extension connect (gesture-safe, cached pubkey,
+ *                     popup-honest timeout) — the "approval popup" flow.
+ * - `nip46`         — NIP-46 remote signer (bunker://) client, NIP-44 only.
  */
 
 export * from "./config.ts";
@@ -23,5 +26,7 @@ export * from "./nativePasskeyAuth.ts";
 export * from "./derivedKeys.ts";
 export * from "./keyStorage.ts";
 export * from "./signer.ts";
+export * from "./nip07.ts";
+export * from "./nip46.ts";
 export * from "./quickStart.ts";
 export * from "./loginFlows.ts";
