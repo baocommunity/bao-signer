@@ -231,12 +231,27 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
               Sign in with browser extension (recommended)
             </button>
           ) : (
-            <div style={{ border: `1px solid ${V("rule", "#d8d2c8")}`, background: V("paper", "#f7f3ec"), padding: 12, textAlign: "center" }}>
-              <p style={{ fontSize: 11, lineHeight: 1.6, color: V("muted", "#6b6259"), margin: 0 }}>
-                <b style={{ color: V("ink", "#1a1a1a") }}>Recommended:</b> install a Nostr signer
-                extension (Alby, nos2x, Amber) — it signs for you and your keys never touch
-                this page. Reload after installing.
+            <div style={{ border: `1px solid ${V("rule", "#d8d2c8")}`, background: V("paper", "#f7f3ec"), padding: 14, textAlign: "left" }}>
+              <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: V("font-mono", "ui-monospace, monospace"), color: V("ink", "#1a1a1a"), marginTop: 0, marginBottom: 8 }}>
+                No signer extension detected on this browser
               </p>
+              <ol style={{ fontSize: 11, lineHeight: 1.7, color: V("muted", "#6b6259"), margin: 0, paddingLeft: 18 }}>
+                <li>
+                  <b style={{ color: V("ink", "#1a1a1a") }}>Recommended:</b> install a Nostr signer
+                  extension (Alby, nos2x, Amber) — it signs for you and your keys never touch
+                  this page. The sign-in button appears here automatically once it is active.
+                </li>
+                <li>
+                  <b style={{ color: V("ink", "#1a1a1a") }}>Already installed?</b> It may be blocked
+                  on this site: open your extension&apos;s settings → <i>Site access</i> → allow
+                  this origin (and disable tracker/ad shields for localhost), then reload.
+                </li>
+                <li>
+                  <b style={{ color: V("ink", "#1a1a1a") }}>No extension?</b> Register a new account
+                  below (24-word backup), or recover an existing one via the collapsed
+                  seed / remote-signer sections.
+                </li>
+              </ol>
             </div>
           )}
 
