@@ -12,7 +12,8 @@
 
 import type { FastifyInstance } from 'fastify';
 import { createHash, createHmac, randomBytes, randomInt, pbkdf2Sync, createCipheriv } from 'crypto';
-import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
+import { generateSecretKey, getPublicKey, nip19, verifyEvent } from 'nostr-tools';
+import { validateNip98Challenge, verifyNip98Binding } from './nip98.ts';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { holdNsec, consumeNsec, computeNsecHash } from './nsecManager.ts';
 import type { SignerStorage } from './storage.ts';
@@ -360,6 +361,96 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
     }
 
     request.log.info({ email_hash: emailHash, pubkey: pubkey.slice(0, 8) }, 'Email account registered with existing key');
+    return reply.send({ registered: true, pubkey });
+  });
+
+  // ---------------------------------------------------------------
+  // POST /auth/email/register-nip98 — PURIST bind: prove key control with a
+  // signed NIP-98 event; the nsec NEVER crosses the wire. Server stores only
+  // email → pubkey. Requires: valid OTP (inbox ownership) + a fresh server
+  // challenge (replay protection) + u/method binding to this endpoint.
+  // ---------------------------------------------------------------
+  app.post('/auth/email/register-nip98', {
+    config: { rateLimit },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email', 'code', 'username', 'event'],
+        properties: {
+          email: { type: 'string', maxLength: 254 },
+          code: { type: 'string', maxLength: 32 },
+          username: { type: 'string', maxLength: 64 },
+          event: { type: 'object' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { email: rawEmail, code, username, event } = request.body as {
+      email?: string;
+      code?: string;
+      username?: string;
+      event?: { kind?: number; pubkey?: string; tags?: unknown[]; sig?: string; id?: string };
+    };
+    if (!rawEmail || !code || !username || !event) {
+      return reply.status(400).send({ error: 'email, code, username, and event are required' });
+    }
+    const email = rawEmail.toLowerCase().trim();
+    if (!EMAIL_RE.test(email)) return reply.status(400).send({ error: 'Invalid email address' });
+    if (!/^\d{6}$/.test(code)) return reply.status(400).send({ error: 'Invalid code format' });
+    if ((event.kind as number) !== 27235) {
+      return reply.status(400).send({ error: { code: 'INVALID_KIND', message: 'Event must be kind 27235 (NIP-98)' } });
+    }
+
+    // 1) Signature FIRST — an invalid event must not burn the challenge.
+    let sigOk = false;
+    try {
+      sigOk = verifyEvent(event as Parameters<typeof verifyEvent>[0]);
+    } catch {
+      sigOk = false;
+    }
+    if (!sigOk) {
+      return reply.status(401).send({ error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' } });
+    }
+
+    // 2) Single-use server challenge (replay protection).
+    const challengeResult = validateNip98Challenge(event as { tags?: unknown[] });
+    if (!challengeResult.valid) {
+      return reply.status(401).send({ error: { code: 'INVALID_CHALLENGE', message: challengeResult.error || 'Challenge validation failed' } });
+    }
+
+    // 3) u/method binding to THIS endpoint.
+    if (!verifyNip98Binding(event as { tags: unknown[]; kind: number }, request.url, 'POST')) {
+      return reply.status(401).send({ error: { code: 'BINDING_MISMATCH', message: 'Event is not bound to this endpoint' } });
+    }
+
+    const pubkey = event.pubkey as string;
+    const emailHash = hashEmail(email);
+
+    // Idempotent: the same inbox+key pair just re-proves and returns.
+    const existing = await storage.emailGetAccount(emailHash);
+    if (existing) {
+      if (existing.pubkey === pubkey) {
+        return reply.send({ registered: true, pubkey });
+      }
+      return reply.status(409).send({ error: 'Email already registered with a different key' });
+    }
+
+    // 4) Proof of inbox ownership via OTP (same gate as the nsec register).
+    const nowSec = Math.floor(Date.now() / 1000);
+    const tokenRow = await storage.emailGetValidOtp(hashToken(code), emailHash, nowSec);
+    if (!tokenRow) {
+      return reply.status(401).send({ error: 'Invalid or expired code — request one via /auth/email/request first' });
+    }
+    await storage.emailMarkOtpUsed(hashToken(code));
+    await storage.emailDeleteOtpsForEmail(emailHash);
+
+    // 5) Bind: store email → pubkey ONLY. No key material is ever received,
+    //    so nothing to encrypt, nothing to back up, nothing to leak.
+    await storage.emailInsertAccount({ email_hash: emailHash, pubkey, username });
+    await storage.insertAccount({ pubkey, nsec_hash: computeNsecHash(''), username, now: nowSec });
+    await storage.insertAuthMethod({ method: 'email', authId: emailHash, pubkey, now: nowSec });
+
+    request.log.info({ email_hash: emailHash, pubkey: pubkey.slice(0, 8) }, 'Email bound via NIP-98 (purist, no key material)');
     return reply.send({ registered: true, pubkey });
   });
 }
