@@ -250,6 +250,42 @@ export function createSelfCustodyAccount(): {
  * with `allowServerKeyGeneration: false`: it stores only `email → pubkey` and
  * never mints or retains a copy of the nsec.
  */
+/**
+ * PURIST email bind: prove key control with a signed NIP-98 event — the nsec
+ * NEVER leaves the browser. Server verifies signature + challenge + endpoint
+ * binding + OTP, then stores only email → pubkey.
+ *
+ * Flow: fetch server challenge → sign kind-27235 locally → POST event.
+ */
+export async function emailRegisterKeyNip98(opts: {
+  email: string;
+  code: string;
+  username: string;
+  secretKey: Uint8Array;
+  apiBaseUrl?: string;
+}): Promise<{ registered: boolean; pubkey: string }> {
+  const base = getSignerApiBase(opts.apiBaseUrl);
+  const url = `${base}/v1/auth/email/register-nip98`;
+  const challenge = await fetchAuthChallenge(opts.apiBaseUrl);
+  const event = signAuthEvent(opts.secretKey, { url, method: "POST", challenge });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: opts.email,
+      code: opts.code,
+      username: opts.username,
+      event,
+    }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } | string };
+    const msg = typeof body.error === "string" ? body.error : body.error?.message ?? `HTTP ${res.status}`;
+    throw new Error(`Email bind failed: ${msg}`);
+  }
+  return (await res.json()) as { registered: boolean; pubkey: string };
+}
+
 export async function emailRegisterKey(opts: {
   email: string;
   nsec: string;
