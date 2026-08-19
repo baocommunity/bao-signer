@@ -1,6 +1,6 @@
 {
   "name": "bao-signer",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Passkey-first Nostr signing: WebAuthn PRF identity derivation, passkey-wrapped key storage, and a Fastify auth server.",
   "license": "MIT",
   "type": "module",
