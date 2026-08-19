@@ -301,6 +301,9 @@ export async function loginBreezPasskey(options: {
   const optRes = await fetch(`${API_BASE}/v1/auth/passkey/login-options`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    // Empty JSON object REQUIRED: a Content-Type: application/json POST
+    // with no body is rejected by the server (HTTP 400).
+    body: JSON.stringify({}),
   });
 
   if (!optRes.ok) {
@@ -408,6 +411,8 @@ export async function linkPasskeyOptions(opts: {
   const res = await fetch(`${API_BASE}/v1/auth/link/passkey/options`, {
     method: "POST",
     headers: bearerHeaders(opts.sessionToken),
+    // Empty JSON object REQUIRED (same bodiless-JSON-POST 400).
+    body: JSON.stringify({}),
   });
   if (!res.ok) {
     throw new Error(

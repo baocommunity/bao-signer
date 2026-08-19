@@ -572,4 +572,26 @@ describe("Error code consistency", () => {
       await expect(t.fn()).rejects.toThrow(t.expected);
     }
   });
+
+describe("loginBreezPasskey bodiless-JSON regression", () => {
+  it("login-options POST carries an empty JSON body (server 400s bodiless JSON)", async () => {
+    const { loginBreezPasskey } = await import("../../src/client/passkeyAuth.ts");
+    const seed = new Uint8Array(32).fill(0x22);
+    mockFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        challengeId: "ch_1",
+        options: { challenge: "abc", rpId: "localhost" },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session: {} }), {
+        status: 200, headers: { "Content-Type": "application/json" } }));
+    mockStartAuthentication.mockResolvedValueOnce({
+      id: "cred_1",
+      clientExtensionResults: { prf: { results: { first: seed.buffer } } },
+    });
+    await loginBreezPasskey();
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe("{}");
+  });
+});
 });
