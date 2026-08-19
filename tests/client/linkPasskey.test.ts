@@ -57,6 +57,8 @@ describe("linkPasskeyOptions", () => {
     expect(url).toBe(`${TEST_API_BASE}/v1/auth/link/passkey/options`);
     expect(init.method).toBe("POST");
     expect(init.headers.Authorization).toBe(`Bearer ${SESSION}`);
+    // Regression: JSON-typed POSTs MUST carry a body (server 400s bodiless JSON).
+    expect(init.body).toBe("{}");
   });
 
   it("throws on server error", async () => {
