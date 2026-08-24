@@ -175,8 +175,6 @@ export async function telegramQrStart(apiBaseUrl?: string): Promise<TelegramQrCh
 
 export interface TelegramQrPollResult {
   authenticated: boolean;
-  /** Challenge unknown or expired (HTTP 404/410) — caller should restart. */
-  expired?: boolean;
   expiresAt?: number;
   session?: AuthSession;
 }
@@ -187,9 +185,7 @@ export async function telegramQrPoll(
 ): Promise<TelegramQrPollResult> {
   const base = getSignerApiBase(apiBaseUrl);
   const res = await fetch(`${base}/v1/auth/telegram/qr/poll?state=${encodeURIComponent(state)}`);
-  // 404 = challenge gone/consumed, 410 = explicit expiry — both mean
-  // "start over"; distinguishable from an honest pending poll.
-  if (res.status === 410 || res.status === 404) return { authenticated: false, expired: true };
+  if (res.status === 410) return { authenticated: false };
   if (!res.ok) throw new Error(`Telegram QR poll failed (${res.status})`);
   return (await res.json()) as TelegramQrPollResult;
 }
