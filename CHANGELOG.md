@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.9 — Telegram QR login in the unified module
+
+- **loginFlows**: `telegramQrPoll` distinguishes expired/gone challenges
+  (404/410 → `{expired:true}`) from honest pending polls
+- **loginFlowMachine**: `telegramStart` / `telegramPollTick` tri-state
+  (pending/expired/done), session wrapped as a standard `LoginResult`
+  (`method:'telegram'`); new `apiBaseUrl` FlowDep for self-hosted fleets
+- **BaoLoginPanel**: collapsed Telegram section (start → Open-Telegram
+  approval link → 3 s poll, cancel + expiry notice)
+- Fleet-neutral: no bot token/username/URLs in the module — deployers
+  inject their own via server options + client config
+
+
 ## 0.4.0 — unified GUI login module (BaoLoginPanel) + canonical seed math
 
 The whole point of the package: ONE login module, every app, same UX.

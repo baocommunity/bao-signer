@@ -18,10 +18,9 @@
 import { isNip07Available, connectNip07Signer } from "./nip07.ts";
 import { connectNip46Signer, parseBunkerUrl } from "./nip46.ts";
 import { newSeedPhrase, validateSeedPhrase, createSeedIdentitySigner } from "./seedIdentity.ts";
-import { telegramQrStart, telegramQrPoll } from "./loginFlows.ts";
 import { nip19 } from "nostr-tools";
 
-export type LoginMethod = "nip07" | "passkey" | "nip46" | "seed" | "telegram";
+export type LoginMethod = "nip07" | "passkey" | "nip46" | "seed";
 
 export type FlowState =
   | { step: "choose" }
@@ -51,8 +50,6 @@ export interface FlowDeps {
   loginPasskey?: () => Promise<{ pubkey: string; session: unknown }>;
   /** Optional timeout for the extension prompt. */
   nip07TimeoutMs?: number;
-  /** API base for server-assisted flows (defaults to the signer fleet). */
-  apiBaseUrl?: string;
 }
 
 export interface Machine {
@@ -63,12 +60,6 @@ export interface Machine {
   loginNip46: (bunkerUrl: string) => Promise<LoginResult>;
   loginSeed: (input: string) => Promise<LoginResult>;
   registerSeed: () => Promise<{ phrase: string; result: LoginResult }>;
-  /** Begin a Telegram QR login — returns the auth URL to open/scan. */
-  telegramStart: () => Promise<{ state: string; authUrl: string; expiresAt: number }>;
-  /** One poll tick: 'pending' | 'expired' | done(with LoginResult). */
-  telegramPollTick: (
-    state: string,
-  ) => Promise<{ status: "pending"; expiresAt?: number } | { status: "expired" } | { status: "done"; result: LoginResult }>;
   /** Build the backup file contents for a registered identity. */
   buildBackupFileText: (phrase: string, pubkey: string, nsec: string) => string;
   /** Validate a bunker URL without connecting. */
@@ -120,25 +111,6 @@ export function createLoginFlow(deps: FlowDeps = {}): Machine {
         phrase,
         result: { method: "seed", pubkey: identity.pubkey, session: identity, backupFileText },
       };
-    },
-
-    async telegramStart() {
-      const challenge = await telegramQrStart(deps.apiBaseUrl);
-      return challenge;
-    },
-
-    async telegramPollTick(state) {
-      const res = await telegramQrPoll(state, deps.apiBaseUrl);
-      if (res.authenticated && res.session) {
-        const session = res.session as { pubkey?: string };
-        const pubkey = session.pubkey ?? "";
-        return {
-          status: "done",
-          result: { method: "telegram", pubkey, session: res.session },
-        } as { status: "done"; result: LoginResult };
-      }
-      if (res.expired) return { status: "expired" } as const;
-      return { status: "pending", expiresAt: res.expiresAt };
     },
 
     buildBackupFileText(phrase: string, pubkey: string, nsec: string): string {
