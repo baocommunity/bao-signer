@@ -74,7 +74,14 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
 
   // collapsed sections
   const [showNip46, setShowNip46] = useState(false);
+  const [showTg, setShowTg] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
+  // Telegram QR login state machine (see loginFlowMachine.telegramStart).
+  const [tg, setTg] = useState<
+    | { phase: "idle" }
+    | { phase: "waiting"; state: string; authUrl: string; expiresAt: number }
+    | { phase: "expired" }
+  >({ phase: "idle" });
   const [bunkerUrl, setBunkerUrl] = useState("");
   const [seedInput, setSeedInput] = useState("");
 
@@ -82,6 +89,32 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
   const [pending, setPending] = useState<{ phrase: string; result: LoginResult } | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [paper, setPaper] = useState(false);
+
+  // Telegram approval poll — every 3s while a challenge is live. The server's
+  // atomic consume means concurrent tabs cannot mint duplicate sessions.
+  useEffect(() => {
+    if (tg.phase !== "waiting") return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await flow.telegramPollTick(tg.state);
+        if (cancelled) return;
+        if (res.status === "done") {
+          setTg({ phase: "idle" });
+          onDone(res.result);
+        } else if (res.status === "expired") {
+          setTg({ phase: "expired" });
+        }
+      } catch {
+        /* transient network blip — keep polling until expiry */
+      }
+    };
+    const t = setInterval(() => void tick(), 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [tg.phase === "waiting" ? tg.state : null, flow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (fn: () => Promise<LoginResult>) => {
     setBusy(true);
@@ -92,6 +125,16 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const startTelegram = async () => {
+    setError(null);
+    try {
+      const ch = await flow.telegramStart();
+      setTg({ phase: "waiting", state: ch.state, authUrl: ch.authUrl, expiresAt: ch.expiresAt });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -299,6 +342,48 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
                 {!flow.validateBunkerUrl(bunkerUrl).ok && (
                   <p style={{ marginTop: 6, textAlign: "center", fontSize: 10, color: V("muted", "#6b6259") }}>
                     Paste a valid bunker:// URL (with at least one wss:// relay) to enable this button.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Telegram — server-assisted identity link, collapsed */}
+          <div style={{ border: `1px solid ${V("rule", "#d8d2c8")}`, background: V("paper", "#f7f3ec") }}>
+            <button
+              type="button"
+              onClick={() => { setShowTg((v) => !v); }}
+              style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "8px 16px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", fontFamily: V("font-mono", "ui-monospace, monospace"), color: V("muted", "#6b6259"), background: "transparent", border: "none", cursor: "pointer" }}
+            >
+              <span>Telegram</span>
+              <span>{showTg ? "▲" : "▼"}</span>
+            </button>
+            {showTg && (
+              <div style={{ borderTop: `1px solid ${V("rule", "#d8d2c8")}`, padding: 16 }}>
+                <p style={{ fontSize: 11, lineHeight: 1.6, color: V("muted", "#6b6259"), marginTop: 0 }}>
+                  Approve in Telegram — your account is linked to this app without ever pasting keys here.
+                  The server holds the account key (server-assisted method).
+                </p>
+                {tg.phase !== "waiting" ? (
+                  <button type="button" disabled={busy} onClick={() => void startTelegram()} style={btn("primary")}>
+                    Log in with Telegram
+                  </button>
+                ) : (
+                  <div>
+                    <a href={tg.authUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", marginBottom: 10, ...btn("primary") as React.CSSProperties, textDecoration: "none" }}>
+                      Open Telegram to approve ↗
+                    </a>
+                    <p style={{ margin: 0, textAlign: "center", fontSize: 10, fontFamily: V("font-mono", "ui-monospace, monospace"), color: V("muted", "#6b6259") }}>
+                      Waiting for approval…{" "}
+                      <button type="button" onClick={() => setTg({ phase: "idle" })} style={{ background: "transparent", border: "none", cursor: "pointer", textDecoration: "underline", color: V("muted", "#6b6259"), padding: 0, fontSize: 10 }}>
+                        cancel
+                      </button>
+                    </p>
+                  </div>
+                )}
+                {tg.phase === "expired" && (
+                  <p style={{ margin: "8px 0 0", textAlign: "center", fontSize: 10, color: V("danger", "#a33") }}>
+                    Challenge expired — click “Log in with Telegram” for a fresh one.
                   </p>
                 )}
               </div>
