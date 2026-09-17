@@ -107,4 +107,4 @@ pnpm typecheck
 
 ## License
 
-MIT — BAO Community contributors.
+AGPL-3.0 — BAO Community contributors. See `LICENSE` and `NOTICE.md`.
