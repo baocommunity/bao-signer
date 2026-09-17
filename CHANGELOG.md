@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Relicensed MIT → AGPL-3.0** — sole-author relicense by baocommunity;
+  see `LICENSE` + `NOTICE.md`
+
 ## 0.4.9 — Telegram QR login in the unified module
 
 - **loginFlows**: `telegramQrPoll` distinguishes expired/gone challenges
