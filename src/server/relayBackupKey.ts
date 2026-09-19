@@ -5,7 +5,7 @@ import { createHmac } from 'crypto';
  *
  * FAIL CLOSED: a server-side HMAC secret is REQUIRED. An earlier design fell
  * back to `sha256("bao:backup:" + credentialId)` when no secret was
- * configured — but the credentialId is not a secret (it is sent to the server
+ * configured - but the credentialId is not a secret (it is sent to the server
  * on every login), so that fallback produced backup keys anyone could
  * reproduce. This function refuses to derive without a real secret.
  *

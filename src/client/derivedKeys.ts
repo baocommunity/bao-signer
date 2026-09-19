@@ -81,7 +81,7 @@ function ensureValidScalar(derived: Uint8Array, depth: number = 0): Uint8Array {
 }
 
 /**
- * Public wrapper for {@link ensureValidScalar} — validates/re-derives a 32-byte
+ * Public wrapper for {@link ensureValidScalar} - validates/re-derives a 32-byte
  * value until it is a valid secp256k1 private key scalar (1 <= k < N).
  * Use this for ANY hash-derived private key (e.g. PRF-derived Nostr keys).
  */
@@ -272,7 +272,7 @@ export function parseDerivationPath(path: string): { baoId: string; index: numbe
  *
  * @param senderPrivkey - Sender's derived private key
  * @param recipientPubkey - Recipient's derived public key
- * @returns Shared secret (32 bytes hex) — NOT a valid NIP-44 conversation key
+ * @returns Shared secret (32 bytes hex) - NOT a valid NIP-44 conversation key
  */
 export function deriveBaoConversationKey(
   senderPrivkey: string,

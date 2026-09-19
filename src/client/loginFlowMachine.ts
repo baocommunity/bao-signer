@@ -1,10 +1,10 @@
 /**
- * loginFlowMachine — the unified login UX as a pure, framework-free state
+ * loginFlowMachine - the unified login UX as a pure, framework-free state
  * machine. This is the brain of BaoLoginPanel (React view) and is fully
  * unit-testable without a DOM.
  *
  * Encodes the BAO key-handling philosophy:
- *  - Extension (NIP-07) is the recommended daily path — keys never touch
+ *  - Extension (NIP-07) is the recommended daily path - keys never touch
  *    the page; the machine's connect call MUST be invoked synchronously
  *    from the click handler (gesture preservation for the approval popup).
  *  - Passkey second (keys live in the authenticator).
@@ -34,10 +34,10 @@ export interface LoginResult {
   pubkey: string;
   /** Method-specific signer session (shape varies; callers cast). */
   session: unknown;
-  /** Present only for seed-phrase registration — the backup file text. */
+  /** Present only for seed-phrase registration - the backup file text. */
   backupFileText?: string;
   /** Registration: true when the user downloaded the backup file (false =
-   * paper path — the app should keep the backup reminder pending). */
+   * paper path - the app should keep the backup reminder pending). */
   backupCompleted?: boolean;
   /** Registration: the 24-word phrase (handle with care, clear after use). */
   phrase?: string;
@@ -96,7 +96,7 @@ export function createLoginFlow(deps: FlowDeps = {}): Machine {
         identity = createNip44IdentitySigner(decoded.data as Uint8Array);
       } else {
         if (!validateSeedPhrase(trimmed)) {
-          throw new Error("Invalid seed phrase — enter the 24 mnemonic words or the nsec key");
+          throw new Error("Invalid seed phrase - enter the 24 mnemonic words or the nsec key");
         }
         identity = createSeedIdentitySigner(trimmed);
       }

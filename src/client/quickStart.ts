@@ -1,5 +1,5 @@
 /**
- * Quick Start — one-click guest onboarding (Nostr UX pattern: value before commitment).
+ * Quick Start - one-click guest onboarding (Nostr UX pattern: value before commitment).
  *
  * Flow:
  * 1. User clicks "Quick Start"
@@ -9,7 +9,7 @@
  * 5. User backs up their nsec at their own pace (or upgrades to a passkey)
  *
  * The nsec is never stored in plaintext and never returned by account
- * creation — use `getQuickStartNsec()` for the one-time backup display.
+ * creation - use `getQuickStartNsec()` for the one-time backup display.
  */
 
 import {
@@ -62,7 +62,7 @@ export async function createQuickStartAccount(): Promise<QuickStartAccount> {
   const account: QuickStartAccount = {
     publicKey: keyPair.publicKey,
     npub,
-    // nsec intentionally omitted — retrieve via getQuickStartNsec()
+    // nsec intentionally omitted - retrieve via getQuickStartNsec()
     createdAt: Date.now(),
   };
 
@@ -76,7 +76,7 @@ export async function createQuickStartAccount(): Promise<QuickStartAccount> {
     localStorage.setItem(STORAGE_KEYS.FIRST_ACTION_COMPLETED, "true");
   } catch (err) {
     console.warn(
-      "[quickStart] localStorage unavailable — session will not persist:",
+      "[quickStart] localStorage unavailable - session will not persist:",
       err instanceof Error ? err.message : String(err),
     );
   }

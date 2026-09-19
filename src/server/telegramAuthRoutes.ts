@@ -1,19 +1,19 @@
 /**
- * Telegram Auth — Login Widget verification + OIDC QR login.
+ * Telegram Auth - Login Widget verification + OIDC QR login.
  *
  * Endpoints:
- * - GET  /auth/telegram/config   — Public bot config (username + configured flag)
- * - POST /auth/telegram/verify   — Verify Telegram Login Widget data
- * - GET  /auth/telegram/qr       — Generate OIDC PKCE challenge → QR auth URL
- * - GET  /auth/telegram/callback — OIDC redirect: exchange code, mark challenge
- * - GET  /auth/telegram/qr/poll  — Poll QR status, receive session
+ * - GET  /auth/telegram/config   - Public bot config (username + configured flag)
+ * - POST /auth/telegram/verify   - Verify Telegram Login Widget data
+ * - GET  /auth/telegram/qr       - Generate OIDC PKCE challenge → QR auth URL
+ * - GET  /auth/telegram/callback - OIDC redirect: exchange code, mark challenge
+ * - GET  /auth/telegram/qr/poll  - Poll QR status, receive session
  *
  * Privacy model:
- * - auth_id = HMAC-SHA256(botToken, telegram_id) — non-reversible without the secret
+ * - auth_id = HMAC-SHA256(botToken, telegram_id) - non-reversible without the secret
  * - No PII stored: Telegram identity is discarded after auth_id derivation
  * - Username is random, never derived from Telegram identity
  *
- * Secrets policy: bot token / OIDC client secret are injected via options —
+ * Secrets policy: bot token / OIDC client secret are injected via options -
  * nothing is read from env or hardcoded here.
  */
 
@@ -55,11 +55,11 @@ function verifyTelegramAuth(data: Record<string, string>, botToken: string): boo
 
 export interface TelegramAuthOptions {
   storage: SignerStorage;
-  /** Bot token — required for the Login Widget flow + auth_id derivation. */
+  /** Bot token - required for the Login Widget flow + auth_id derivation. */
   botToken?: string;
   /** Public bot username (returned by /config so the frontend needn't hardcode it). */
   botUsername?: string;
-  /** OIDC client credentials — required for the QR flow. */
+  /** OIDC client credentials - required for the QR flow. */
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;
@@ -70,7 +70,7 @@ export interface TelegramAuthOptions {
   sessionTtlSeconds?: number;
   rateLimit?: { max: number; timeWindow: string };
   /**
-   * When false, Telegram can only sign in an already-known user — it will
+   * When false, Telegram can only sign in an already-known user - it will
    * NEVER generate a Nostr key. Unknown users get a 403 (widget) or an
    * `account_creation_disabled` redirect (QR). Default true.
    */
@@ -270,7 +270,7 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
 
     const now = Math.floor(Date.now() / 1000);
 
-    // Atomic consume — concurrent polls cannot mint duplicate sessions
+    // Atomic consume - concurrent polls cannot mint duplicate sessions
     const consumed = await storage.tgConsumeAuthenticated(state);
     if (!consumed) {
       const pending = await storage.tgGetChallenge(state);
@@ -382,7 +382,7 @@ export async function telegramAuthRoutes(app: FastifyInstance, opts: TelegramAut
       return reply.status(401).send({ error: 'Telegram auth data expired' });
     }
 
-    // PII discarded after this point — only the opaque auth_id is used
+    // PII discarded after this point - only the opaque auth_id is used
     const authId = deriveAuthId(String(body.id));
     let pubkey: string;
     let isNewAccount: boolean;

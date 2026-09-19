@@ -40,7 +40,7 @@ export function getNativePasskeyConfig(): Required<NativePasskeyConfig> {
 }
 
 /** Namespaced localStorage key. Exported so sibling modules
- * (nativePasskeyAuth) share the SAME configurable prefix — hardcoding a
+ * (nativePasskeyAuth) share the SAME configurable prefix - hardcoding a
  * second prefix splits enrollment state when consumers configure a custom one. */
 export function nativePasskeyStorageKey(suffix: string): string {
   return `${nativePasskeyConfig.storagePrefix}_${suffix}`;
@@ -51,7 +51,7 @@ export function nativePasskeyStorageKey(suffix: string): string {
 export interface PasskeyEnrollment {
   credentialId: string;
   isYubiKey: boolean;
-  /** 'prf' | 'largeBlob' — how the master key is wrapped */
+  /** 'prf' | 'largeBlob' - how the master key is wrapped */
   method: "prf" | "largeBlob";
 }
 
@@ -98,7 +98,7 @@ export function extractPrfSeed(response: {
   getClientExtensionResults?: () => unknown;
 }): Uint8Array | null {
   // Raw PublicKeyCredential exposes extension results ONLY via the
-  // getClientExtensionResults() method — there is no clientExtensionResults
+  // getClientExtensionResults() method - there is no clientExtensionResults
   // property, so reading it always yields undefined. JSON responses
   // (SimpleWebAuthn) carry the property instead. Support both.
   const ext = (
@@ -261,7 +261,7 @@ export async function registerPlatformPasskey(masterKey: CryptoKey): Promise<Pas
   // Try to extract PRF seed from registration response
   let prfSeed = extractPrfSeed(credential as any);
 
-  // PRF sometimes isn't returned during creation — do a self-auth to get it
+  // PRF sometimes isn't returned during creation - do a self-auth to get it
   if (!prfSeed) {
     const extResults = (credential as any).getClientExtensionResults?.() as
       | PrfExtensionOutput
@@ -282,7 +282,7 @@ export async function registerPlatformPasskey(masterKey: CryptoKey): Promise<Pas
   }
 
   if (!prfSeed) {
-    // Platform authenticator doesn't support PRF — try largeBlob path for YubiKey
+    // Platform authenticator doesn't support PRF - try largeBlob path for YubiKey
     throw new Error(
       "PRF_NOT_SUPPORTED: Your device does not support PRF. Try a YubiKey with largeBlob support or use PIN instead.",
     );
@@ -341,7 +341,7 @@ export async function registerYubiKeyWithPrf(masterKey: CryptoKey): Promise<Pass
   // Try to extract PRF seed from registration response
   let prfSeed = extractPrfSeed(credential as any);
 
-  // PRF sometimes isn't returned during creation — do a self-auth to get it
+  // PRF sometimes isn't returned during creation - do a self-auth to get it
   if (!prfSeed) {
     const extResults = (credential as any).getClientExtensionResults?.() as
       | PrfExtensionOutput
@@ -448,7 +448,7 @@ export async function registerYubiKeyPasskey(masterKey: CryptoKey): Promise<Pass
   try {
     await navigator.credentials.get({ publicKey: authOptions });
   } catch {
-    // largeBlob write failed — the YubiKey cannot store our secret.
+    // largeBlob write failed - the YubiKey cannot store our secret.
     // Without the blob on the key, we have no secure way to derive the
     // wrapping key on unlock. Abort enrollment rather than create a
     // broken enrollment that can never unlock.
@@ -475,7 +475,7 @@ export async function registerYubiKeyPasskey(masterKey: CryptoKey): Promise<Pass
       | undefined;
     const readBack = verifyExt?.largeBlob?.blob;
     if (!readBack || !timingSafeEqual(new Uint8Array(readBack), largeBlobData)) {
-      throw new Error("YubiKey largeBlob verification failed — data did not persist. Enrollment aborted.");
+      throw new Error("YubiKey largeBlob verification failed - data did not persist. Enrollment aborted.");
     }
   } catch {
     throw new Error("YubiKey largeBlob read-back verification failed. Enrollment aborted.");
@@ -490,7 +490,7 @@ export async function registerYubiKeyPasskey(masterKey: CryptoKey): Promise<Pass
 }
 
 /** True when the authenticator ceremony was cancelled/timed out by the user
- * (or no authenticator responded) — NOT a genuine capability failure. */
+ * (or no authenticator responded) - NOT a genuine capability failure. */
 /** Exported so consumers can distinguish user-cancel from capability failures. */
 export function isCancelError(e: unknown): boolean {
   return (
@@ -522,7 +522,7 @@ async function unlockWithPrf(credentialIdB64: string, wrappedB64: string): Promi
   if (!assertion) throw new Error("Passkey authentication was cancelled");
 
   const prfSeed = extractPrfSeed(assertion as any);
-  if (!prfSeed) throw new Error("PRF result not available — your authenticator may not support PRF");
+  if (!prfSeed) throw new Error("PRF result not available - your authenticator may not support PRF");
 
   const wrappingKey = await deriveMasterKeyFromPrf(prfSeed);
   return unwrapMasterKey(wrappedB64, wrappingKey);
@@ -592,7 +592,7 @@ export async function unlockWithPasskey(): Promise<PasskeyUnlockResult> {
     } catch (e) {
       // User cancelled → report honestly, never mislabel as unavailable.
       if (isCancelError(e)) throw e;
-      // largeBlob read failed — try PRF fallback (YubiKey may support both)
+      // largeBlob read failed - try PRF fallback (YubiKey may support both)
     }
   }
 
@@ -662,5 +662,5 @@ export const PasskeyError = {
   CANCELLED: "Authentication was cancelled",
   NO_ENROLLMENT: "No passkey enrolled. Set up a passkey in settings first.",
   WRAP_FAILED: "Failed to wrap master key",
-  UNWRAP_FAILED: "Failed to unlock — wrong authenticator or corrupted data",
+  UNWRAP_FAILED: "Failed to unlock - wrong authenticator or corrupted data",
 } as const;

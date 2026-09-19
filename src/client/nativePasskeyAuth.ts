@@ -132,7 +132,7 @@ export async function registerNativePasskeyAccount(): Promise<NativePasskeyRegis
   // 2. Generate random AES master key
   const masterKey = await generateMasterKey();
 
-  // 3. Enroll passkey — try platform first, then YubiKey PRF, then largeBlob
+  // 3. Enroll passkey - try platform first, then YubiKey PRF, then largeBlob
   let method: "prf" | "largeBlob";
 
   try {
@@ -141,13 +141,13 @@ export async function registerNativePasskeyAccount(): Promise<NativePasskeyRegis
     method = "prf";
   } catch (err: any) {
     if (err.message?.includes("PRF_NOT_SUPPORTED")) {
-      // Platform doesn't support PRF — try YubiKey with PRF
+      // Platform doesn't support PRF - try YubiKey with PRF
       try {
         await registerYubiKeyWithPrf(masterKey);
         method = "prf";
       } catch (yubiErr: any) {
         if (yubiErr.message?.includes("PRF_NOT_SUPPORTED")) {
-          // YubiKey doesn't support PRF either — try largeBlob
+          // YubiKey doesn't support PRF either - try largeBlob
           await registerYubiKeyPasskey(masterKey);
           method = "largeBlob";
         } else {
@@ -162,7 +162,7 @@ export async function registerNativePasskeyAccount(): Promise<NativePasskeyRegis
   // 4. Encrypt nsec with master key
   const cipherText = await encryptSk(nsec, masterKey);
 
-  // 5. Store — value is AES-GCM ciphertext, never plaintext.
+  // 5. Store - value is AES-GCM ciphertext, never plaintext.
   localStorage.setItem(
     encSkKey(),
     cipherText,

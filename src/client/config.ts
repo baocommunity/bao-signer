@@ -30,7 +30,7 @@ export function configureBaoSignerClient(config: BaoSignerClientConfig): void {
 
 /**
  * Resolve the API base URL. Per-call override wins; otherwise the configured
- * value. Fails closed when neither is set — we never fall back to a hardcoded
+ * value. Fails closed when neither is set - we never fall back to a hardcoded
  * origin.
  */
 export function getSignerApiBase(override?: string): string {

@@ -1,5 +1,5 @@
 /**
- * nip46 — NIP-46 (Nostr Connect) remote signer client for bao-signer.
+ * nip46 - NIP-46 (Nostr Connect) remote signer client for bao-signer.
  *
  * Decoupled port of bao.markets' Nip46Client: same hardening (response
  * signature verification, expected-pubkey pinning, JSON/shape validation,
@@ -88,7 +88,7 @@ export function parseBunkerUrl(url: string): BunkerUrlValidation {
           if (parsed.username || parsed.password) return;
           relays.push(r);
         } catch {
-          /* invalid URL — skip */
+          /* invalid URL - skip */
         }
       });
       secret = params.get("secret") || undefined;
@@ -247,7 +247,7 @@ export class Nip46Client {
               }
             }
           } catch {
-            // Decryption/parse failure — not meant for us; ignore.
+            // Decryption/parse failure - not meant for us; ignore.
           }
         },
       },
@@ -352,7 +352,7 @@ export class Nip46Client {
 
     // Signature verification proves WHO signed the event, not WHAT was signed.
     // Confirm the returned event matches the template we asked the signer to
-    // sign — otherwise a misbehaving remote signer could hand back a
+    // sign - otherwise a misbehaving remote signer could hand back a
     // validly-signed DIFFERENT event (wrong kind/content/tags) that callers
     // would then publish as if it were their own.
     if (
@@ -416,7 +416,7 @@ export interface Nip46SignerSession {
 
 /**
  * Connect to a remote signer (bunker:// URL) and return a signer in the
- * same shape as the other bao-signer identity signers — so apps can swap
+ * same shape as the other bao-signer identity signers - so apps can swap
  * extension / passkey / remote without code changes.
  */
 export async function connectNip46Signer(

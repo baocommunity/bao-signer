@@ -1,5 +1,5 @@
 /**
- * nip07 — NIP-07 browser-extension connect for bao-signer.
+ * nip07 - NIP-07 browser-extension connect for bao-signer.
  *
  * Ported from bao.markets' battle-tested extension flow (UnifiedLoginModal
  * EXT-SYNC-001 / EXT-CACHE-001 lessons):
@@ -7,11 +7,11 @@
  *  - SYNCHRONOUS shape check: extensions (Alby, nos2x) need an active user
  *    gesture to open their approval popup. Any async delay between the click
  *    and getPublicKey() lets the gesture expire and the extension silently
- *    hangs — callers must invoke connectNip07Signer() directly from the
+ *    hangs - callers must invoke connectNip07Signer() directly from the
  *    click handler (it does the shape check synchronously).
  *  - Cached pubkey: repeated callers (hooks re-running on storage/auth
  *    events) must not re-open the approval popup every time. Denials are
- *    cached too — one denial is respected until an explicit retry
+ *    cached too - one denial is respected until an explicit retry
  *    ({ force: true }) from a real user action.
  *  - Honest timeout: "check the extension popup" instead of hanging forever.
  */
@@ -127,7 +127,7 @@ export const DEFAULT_NIP07_TIMEOUT_MS = 15_000;
 
 /**
  * Connect to the NIP-07 extension. MUST be called synchronously from a user
- * gesture (click handler) — see module docs. The shape check is synchronous;
+ * gesture (click handler) - see module docs. The shape check is synchronous;
  * the pubkey prompt races a timeout so a missed extension popup produces an
  * actionable error instead of a silent hang.
  */

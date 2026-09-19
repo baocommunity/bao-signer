@@ -1,10 +1,10 @@
 /**
- * LNURL-auth — Lightning wallet login (LUD-04 style).
+ * LNURL-auth - Lightning wallet login (LUD-04 style).
  *
  * Endpoints:
- * - GET /auth/lnurl          — Generate k1 challenge, return LNURL bech32
- * - GET /auth/lnurl/callback — Wallet calls with signature
- * - GET /auth/lnurl/poll     — Frontend polls for auth status + session token
+ * - GET /auth/lnurl          - Generate k1 challenge, return LNURL bech32
+ * - GET /auth/lnurl/callback - Wallet calls with signature
+ * - GET /auth/lnurl/poll     - Frontend polls for auth status + session token
  *
  * "Show once, hash irreversibly": new accounts get their nsec exactly once
  * via the poll response; the server stores only SHA-256(nsec).
@@ -63,7 +63,7 @@ function encodeLnurl(callbackUrl: string): string {
 
 function verifyLnurlSignature(sigHex: string, k1Hex: string, keyHex: string): boolean {
   try {
-    // lowS: false — some Lightning wallets emit high-S DER signatures;
+    // lowS: false - some Lightning wallets emit high-S DER signatures;
     // rejecting them is an availability failure, not a security control
     // (the message hash binds the signature either way).
     return secp256k1.verify(
@@ -81,7 +81,7 @@ export interface LnurlAuthOptions {
   storage: SignerStorage;
   /**
    * Public base URL of this API (including any path prefix, no trailing
-   * slash) — used to build the LNURL callback. Example:
+   * slash) - used to build the LNURL callback. Example:
    * "https://api.example.com/bao-api/v1"
    */
   publicBaseUrl: string;
@@ -94,7 +94,7 @@ export interface LnurlAuthOptions {
   sessionTtlSeconds?: number;
   rateLimit?: { max: number; timeWindow: string };
   /**
-   * When false, LNURL-auth can only sign in an already-known wallet — it will
+   * When false, LNURL-auth can only sign in an already-known wallet - it will
    * NEVER generate a Nostr key. Unknown wallets get `status: ERROR`. Default
    * true for backward compatibility.
    */
@@ -174,7 +174,7 @@ export async function lnurlAuthRoutes(app: FastifyInstance, opts: LnurlAuthOptio
       const username = 'user_' + randomBytes(4).toString('hex');
 
       // Account first (the auth-method row references it via FK), then claim
-      // the auth id atomically — see telegram resolveAccount. Concurrent first
+      // the auth id atomically - see telegram resolveAccount. Concurrent first
       // logins for the same wallet must not mint two identities.
       await storage.insertAccount({ pubkey: candidatePubkey, nsec_hash: computeNsecHash(nsecHex), username, now });
 
@@ -248,7 +248,7 @@ export async function lnurlAuthRoutes(app: FastifyInstance, opts: LnurlAuthOptio
     const nsecData = consumeNsec(k1);
     // MED-1 FIX: the held token is strictly one-shot. If it is gone (a
     // concurrent poll already consumed it, or the process restarted), we
-    // must NOT mint a fresh session — that would hand out a second valid
+    // must NOT mint a fresh session - that would hand out a second valid
     // session for the same challenge. Fail honestly instead.
     const sessionToken = consumeSessionToken(k1);
     if (!sessionToken) {

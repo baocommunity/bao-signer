@@ -1,5 +1,5 @@
 /**
- * NIP-98 auth machinery — server-side challenge store + event binding checks.
+ * NIP-98 auth machinery - server-side challenge store + event binding checks.
  *
  * - GET /auth/challenge issues a single-use, 5-minute server nonce.
  * - Auth events (kind 27235) must carry tags:
@@ -30,7 +30,7 @@ export function generateNip98Challenge(): string {
   return challenge;
 }
 
-/** Single-use validation — consumes the challenge. */
+/** Single-use validation - consumes the challenge. */
 export function validateNip98Challenge(event: { tags?: unknown[] }): { valid: boolean; error?: string } {
   cleanupExpiredChallenges();
   if (!Array.isArray(event.tags)) {

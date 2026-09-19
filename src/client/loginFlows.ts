@@ -1,5 +1,5 @@
 /**
- * loginFlows — thin client helpers for every bao-signer server login method.
+ * loginFlows - thin client helpers for every bao-signer server login method.
  *
  * All helpers use the configured API base (configureBaoSignerClient) or a
  * per-call `apiBaseUrl` override. No secrets ever cross the wire:
@@ -26,7 +26,7 @@ export interface AuthSession {
   expires_at?: number;
 }
 
-/** GET /auth/challenge — server nonce for NIP-98 auth events. */
+/** GET /auth/challenge - server nonce for NIP-98 auth events. */
 export async function fetchAuthChallenge(apiBaseUrl?: string): Promise<string> {
   const base = getSignerApiBase(apiBaseUrl);
   const res = await fetch(`${base}/v1/auth/challenge`);
@@ -222,7 +222,7 @@ export async function telegramWidgetVerify(
 
 /**
  * Create a fully self-custodial identity: a fresh 24-word BIP-39 seed phrase
- * derives the Nostr key entirely on the client — the server never sees or
+ * derives the Nostr key entirely on the client - the server never sees or
  * generates the key. The returned `nsec` + `phrase` are the user's recovery
  * material (save once, then bind email/passkey via the register/link flows).
  */
@@ -251,7 +251,7 @@ export function createSelfCustodyAccount(): {
  * never mints or retains a copy of the nsec.
  */
 /**
- * PURIST email bind: prove key control with a signed NIP-98 event — the nsec
+ * PURIST email bind: prove key control with a signed NIP-98 event - the nsec
  * NEVER leaves the browser. Server verifies signature + challenge + endpoint
  * binding + OTP, then stores only email → pubkey.
  *

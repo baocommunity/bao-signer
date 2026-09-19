@@ -1,5 +1,5 @@
 /**
- * keyStorage — local encrypted Nostr key storage for bao-signer.
+ * keyStorage - local encrypted Nostr key storage for bao-signer.
  *
  * Scheme (ported from bao.markets nostrKeyManager):
  *   device secret (random, per-installation, localStorage)
@@ -9,7 +9,7 @@
  * THREAT MODEL: this protects the key against casual device inspection and
  * trivial localStorage dumps. It does NOT protect against XSS (an attacker
  * running JS in your origin can read the device secret too). For real
- * protection, wrap the key with a passkey — see `nativePasskeyAuth.ts`.
+ * protection, wrap the key with a passkey - see `nativePasskeyAuth.ts`.
  */
 
 import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
@@ -53,7 +53,7 @@ export function configureKeyStorage(config: KeyStorageConfig): void {
 }
 
 /** Namespaced localStorage key. Exported so sibling modules (quickStart)
- * share the SAME configurable prefix — call at use time, not import time. */
+ * share the SAME configurable prefix - call at use time, not import time. */
 export function keyStorageKey(suffix: string): string {
   return `${keyStorageConfig.storagePrefix}_${suffix}`;
 }
