@@ -1,10 +1,10 @@
 /**
- * Email Auth — OTP code login + account registration.
+ * Email Auth - OTP code login + account registration.
  *
  * Endpoints:
- * - POST /auth/email/request  — Send a 6-digit OTP code (always { sent: true })
- * - POST /auth/email/verify   — Verify OTP, return session (+ nsec once for new accounts)
- * - POST /auth/email/register — Link an existing Nostr key to an email
+ * - POST /auth/email/request  - Send a 6-digit OTP code (always { sent: true })
+ * - POST /auth/email/verify   - Verify OTP, return session (+ nsec once for new accounts)
+ * - POST /auth/email/register - Link an existing Nostr key to an email
  *
  * Secrets policy: NO credentials live here. The email sender and the
  * at-rest nsec encryption key are injected by the host app.
@@ -52,7 +52,7 @@ function encryptNsec(nsec: string, encryptionKey: string): { ciphertext: string;
 export interface EmailAuthOptions {
   storage: SignerStorage;
   /**
-   * Deliver the OTP to the user. REQUIRED — this is where your SMTP/API
+   * Deliver the OTP to the user. REQUIRED - this is where your SMTP/API
    * credentials live (injected by the host, never stored in this module).
    * Throwing is safe: the OTP is already stored hashed, so the user can
    * still enter it when the email eventually arrives.
@@ -182,7 +182,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
       request.log.error({ err: err instanceof Error ? err.message : String(err), email_hash: emailHash }, 'Failed to send OTP email');
     });
 
-    // Always { sent: true } — prevents email enumeration
+    // Always { sent: true } - prevents email enumeration
     return reply.send({ sent: true });
   });
 
@@ -217,7 +217,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
       if (failures >= MAX_OTP_FAILURES) {
         await storage.emailDeleteOtpsForEmail(emailHash);
         clearOtpFailures(emailHash);
-        request.log.warn({ email_hash: emailHash }, 'OTP failure lockout — all outstanding codes invalidated');
+        request.log.warn({ email_hash: emailHash }, 'OTP failure lockout - all outstanding codes invalidated');
         return reply.status(429).send({ error: 'Too many failed attempts. Request a new code.' });
       }
       return reply.status(401).send({ error: 'Invalid or expired code' });
@@ -267,7 +267,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
   });
 
   // ---------------------------------------------------------------
-  // POST /auth/email/register — link an existing key to an email
+  // POST /auth/email/register - link an existing key to an email
   // ---------------------------------------------------------------
   app.post('/auth/email/register', {
     config: { rateLimit },
@@ -314,7 +314,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
         return reply.send({ registered: true, pubkey }); // idempotent
       }
       return reply.status(409).send({
-        error: 'Email already registered with a different key — log in with the OTP code and link your key through the authenticated account-link flow',
+        error: 'Email already registered with a different key - log in with the OTP code and link your key through the authenticated account-link flow',
       });
     }
 
@@ -325,12 +325,12 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
     // (The idempotent same-key path above needs no code: the caller already
     // proved key control by presenting the account's own nsec.)
     if (!code || !/^\d{6}$/.test(code)) {
-      return reply.status(400).send({ error: 'A valid 6-digit code is required to bind this email — request one via /auth/email/request first' });
+      return reply.status(400).send({ error: 'A valid 6-digit code is required to bind this email - request one via /auth/email/request first' });
     }
     const nowSec = Math.floor(Date.now() / 1000);
     const tokenRow = await storage.emailGetValidOtp(hashToken(code), emailHash, nowSec);
     if (!tokenRow) {
-      return reply.status(401).send({ error: 'Invalid or expired code — request one via /auth/email/request first' });
+      return reply.status(401).send({ error: 'Invalid or expired code - request one via /auth/email/request first' });
     }
     await storage.emailMarkOtpUsed(hashToken(code));
     await storage.emailDeleteOtpsForEmail(emailHash);
@@ -365,7 +365,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
   });
 
   // ---------------------------------------------------------------
-  // POST /auth/email/register-nip98 — PURIST bind: prove key control with a
+  // POST /auth/email/register-nip98 - PURIST bind: prove key control with a
   // signed NIP-98 event; the nsec NEVER crosses the wire. Server stores only
   // email → pubkey. Requires: valid OTP (inbox ownership) + a fresh server
   // challenge (replay protection) + u/method binding to this endpoint.
@@ -401,7 +401,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
       return reply.status(400).send({ error: { code: 'INVALID_KIND', message: 'Event must be kind 27235 (NIP-98)' } });
     }
 
-    // 1) Signature FIRST — an invalid event must not burn the challenge.
+    // 1) Signature FIRST - an invalid event must not burn the challenge.
     let sigOk = false;
     try {
       sigOk = verifyEvent(event as Parameters<typeof verifyEvent>[0]);
@@ -439,7 +439,7 @@ export async function emailAuthRoutes(app: FastifyInstance, opts: EmailAuthOptio
     const nowSec = Math.floor(Date.now() / 1000);
     const tokenRow = await storage.emailGetValidOtp(hashToken(code), emailHash, nowSec);
     if (!tokenRow) {
-      return reply.status(401).send({ error: 'Invalid or expired code — request one via /auth/email/request first' });
+      return reply.status(401).send({ error: 'Invalid or expired code - request one via /auth/email/request first' });
     }
     await storage.emailMarkOtpUsed(hashToken(code));
     await storage.emailDeleteOtpsForEmail(emailHash);

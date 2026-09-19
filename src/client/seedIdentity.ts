@@ -1,5 +1,5 @@
 /**
- * seedIdentity — BIP-39 seed-phrase identity for bao-signer.
+ * seedIdentity - BIP-39 seed-phrase identity for bao-signer.
  *
  * The recovery root of the unified login stack: a 24-word (256-bit) BIP-39
  * mnemonic derives the Nostr identity key. Logging in with the SAME phrase
@@ -10,11 +10,11 @@
  *   mnemonic (256-bit entropy, BIP-39 checksum)
  *   → PBKDF2-HMAC-SHA512 (2048 rounds, BIP-39 standard) → 64-byte seed
  *   → SHA-256(domainSeparator ‖ seed) → 32-byte secp256k1 scalar
- *     (validated: secp256k1.getPublicKey throws on invalid scalars — the
+ *     (validated: secp256k1.getPublicKey throws on invalid scalars - the
  *     ~2⁻¹²⁸ invalid case surfaces loudly instead of producing a bad key)
  *
  * The default domain separator ('baofund:identity:v1') matches existing
- * bao-fund / bao.markets derivations — do NOT change it without a migration
+ * bao-fund / bao.markets derivations - do NOT change it without a migration
  * plan, or existing users would derive DIFFERENT identities from the same
  * backup phrase.
  */
@@ -25,13 +25,13 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { getPublicKey } from "nostr-tools/pure";
 import { createNip44IdentitySigner } from "./signer.ts";
 
-/** Default derivation domain — MUST stay stable for cross-app parity. */
+/** Default derivation domain - MUST stay stable for cross-app parity. */
 export const DEFAULT_IDENTITY_DOMAIN = "baofund:identity:v1";
 
 /**
  * Generate a new BIP-39 seed phrase.
  * Strong entropy by default: 24 words / 256 bits. A 12-word (128-bit)
- * mnemonic is below the 256-bit floor we want for on-chain Nostr keys — the
+ * mnemonic is below the 256-bit floor we want for on-chain Nostr keys - the
  * phrase is the single point of failure for wallet recovery, and weak
  * entropy lets an offline attacker brute-force it.
  */
@@ -61,7 +61,7 @@ export function deriveIdentityPrivkey(
   const digest = sha256(
     new Uint8Array([...new TextEncoder().encode(domain), ...seed]),
   );
-  // Validate the derived scalar — secp256k1.getPublicKey throws on invalid
+  // Validate the derived scalar - secp256k1.getPublicKey throws on invalid
   // input (0 or ≥ n). Astronomically rare (~2⁻¹²⁸), but a silent bad key
   // would be catastrophic: fail loudly instead.
   getPublicKey(digest);

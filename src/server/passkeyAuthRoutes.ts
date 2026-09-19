@@ -1,20 +1,20 @@
 /**
- * bao-signer server — WebAuthn passkey registration + login routes.
+ * bao-signer server - WebAuthn passkey registration + login routes.
  *
  * Endpoints (relative to the registered prefix):
- * - POST /auth/passkey/register-options — Generate registration challenge
- * - POST /auth/passkey/register          — Verify attestation, create account
- * - POST /auth/passkey/login-options     — Generate login challenge
- * - POST /auth/passkey/login             — Verify assertion, return session
- * - POST /auth/link/passkey/options      — Registration options for linking (authed)
- * - POST /auth/link/passkey/register     — Complete passkey linking (authed)
+ * - POST /auth/passkey/register-options - Generate registration challenge
+ * - POST /auth/passkey/register          - Verify attestation, create account
+ * - POST /auth/passkey/login-options     - Generate login challenge
+ * - POST /auth/passkey/login             - Verify assertion, return session
+ * - POST /auth/link/passkey/options      - Registration options for linking (authed)
+ * - POST /auth/link/passkey/register     - Complete passkey linking (authed)
  *
  * Architecture: v2 "Show Once, Hash Irreversibly"
  * - Server-generated accounts: the nsec is shown once at registration and only
  *   its SHA-256 hash is stored.
  * - PRF-derived accounts: the server never sees the nsec at all.
  *
- * SECURITY POLICY — anonymous PRF registration is REJECTED
+ * SECURITY POLICY - anonymous PRF registration is REJECTED
  * (`PRF_ACCOUNT_LINK_REQUIRES_AUTH`): a WebAuthn attestation proves control of
  * the new credential, NOT control of a caller-supplied Nostr pubkey. Allowing
  * anonymous registration with a client-chosen pubkey lets anyone attach their
@@ -50,7 +50,7 @@ export interface BaoSignerServerOptions {
   /** Allowed origins, e.g. ["https://example.com"]. */
   expectedOrigins: string[];
   /**
-   * HMAC secret for relay backup keys. REQUIRED — the server fails closed
+   * HMAC secret for relay backup keys. REQUIRED - the server fails closed
    * without it. Load from your secret manager (Vault, KMS, env-injected at
    * boot), never hardcode.
    */
@@ -476,7 +476,7 @@ export async function baoSignerAuthRoutes(
   });
 
   // ------------------------------------------------------------------
-  // POST /auth/link/passkey/options — registration options for linking
+  // POST /auth/link/passkey/options - registration options for linking
   // ------------------------------------------------------------------
   if (opts.authenticate) {
     const authenticate = opts.authenticate;
@@ -521,7 +521,7 @@ export async function baoSignerAuthRoutes(
     });
 
     // ----------------------------------------------------------------
-    // POST /auth/link/passkey/register — complete passkey linking
+    // POST /auth/link/passkey/register - complete passkey linking
     // ----------------------------------------------------------------
     app.post('/auth/link/passkey/register', {
       config: { rateLimit },

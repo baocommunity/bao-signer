@@ -1,5 +1,5 @@
 /**
- * Guest Auth — issues a short-lived session for Quick Start (guest) users.
+ * Guest Auth - issues a short-lived session for Quick Start (guest) users.
  *
  * Flow:
  *   1. Client generates a fresh Nostr keypair (Quick Start)
@@ -8,7 +8,7 @@
  *   4. Server verifies freshness, binding, challenge, and signature
  *   5. Server issues a session token
  *
- * No prior registration needed — any valid Nostr keypair works.
+ * No prior registration needed - any valid Nostr keypair works.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -55,7 +55,7 @@ export async function guestAuthRoutes(app: FastifyInstance, opts: GuestAuthOptio
   }, async (request, reply) => {
     const { event } = request.body as { event: Record<string, unknown> };
 
-    // 1. Freshness — replay window
+    // 1. Freshness - replay window
     const now = Math.floor(Date.now() / 1000);
     const eventAge = now - ((event.created_at as number) ?? 0);
     if (eventAge > MAX_EVENT_AGE_SECONDS || eventAge < -60) {
@@ -64,21 +64,21 @@ export async function guestAuthRoutes(app: FastifyInstance, opts: GuestAuthOptio
       });
     }
 
-    // 2. Kind 27235 (NIP-98) only — kind 1 is replayable social content
+    // 2. Kind 27235 (NIP-98) only - kind 1 is replayable social content
     if ((event.kind as number) !== 27235) {
       return reply.status(400).send({
         error: { code: 'INVALID_KIND', message: 'Event must be kind 27235 (NIP-98)' },
       });
     }
 
-    // 3. u/method binding — prevents cross-endpoint replay
+    // 3. u/method binding - prevents cross-endpoint replay
     if (!verifyNip98Binding(event as { tags: unknown[]; kind: number }, request.url.split('?')[0], 'POST')) {
       return reply.status(401).send({
         error: { code: 'INVALID_NIP98_BINDING', message: 'NIP-98 u/method tags do not match this endpoint' },
       });
     }
 
-    // 4. Signature — proves key ownership. Verified BEFORE the single-use
+    // 4. Signature - proves key ownership. Verified BEFORE the single-use
     // challenge is consumed: an invalid event must not burn a valid challenge,
     // otherwise an attacker could DoS a victim's in-flight login by racing
     // with a garbage event that reuses the same challenge.
@@ -94,7 +94,7 @@ export async function guestAuthRoutes(app: FastifyInstance, opts: GuestAuthOptio
       });
     }
 
-    // 5. Server challenge — prevents pre-signed replay (single use)
+    // 5. Server challenge - prevents pre-signed replay (single use)
     const challengeResult = validateNip98Challenge(event as { tags?: unknown[] });
     if (!challengeResult.valid) {
       return reply.status(401).send({ error: { code: 'INVALID_CHALLENGE', message: challengeResult.error || 'Challenge validation failed' } });

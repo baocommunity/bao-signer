@@ -1,5 +1,5 @@
 /**
- * bao-signer/server — Fastify plugins for passkey-first Nostr auth.
+ * bao-signer/server - Fastify plugins for passkey-first Nostr auth.
  *
  * ```ts
  * import Fastify from "fastify";
@@ -15,7 +15,7 @@
  * } from "bao-signer/server";
  * ```
  *
- * Every secret is injected via plugin options — nothing is read from env,
+ * Every secret is injected via plugin options - nothing is read from env,
  * hardcoded, or defaulted to an insecure value.
  */
 

@@ -1,5 +1,5 @@
 /**
- * nsecManager — In-memory hold/consume pattern for v2 "Show Once, Hash Irreversibly"
+ * nsecManager - In-memory hold/consume pattern for v2 "Show Once, Hash Irreversibly"
  *
  * The server stores only SHA-256(nsec_hex) in the database.
  * This Map holds plaintext nsec temporarily between account creation

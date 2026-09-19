@@ -1,5 +1,5 @@
 /**
- * WebAuthn challenge store — in-memory with TTL
+ * WebAuthn challenge store - in-memory with TTL
  *
  * Stores registration and login challenges between the options and verify steps.
  * Challenges are short-lived (5 min) and auto-cleaned.

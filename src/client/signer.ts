@@ -2,13 +2,13 @@
 //
 // NIP-44-capable Nostr signer for passkey-derived (and seed-derived)
 // identities. This is the bridge between an unlocked keypair and the
-// apps that need BOTH signing AND NIP-44 encryption — e.g. the NIP-60
+// apps that need BOTH signing AND NIP-44 encryption - e.g. the NIP-60
 // wallet (encrypted kind:17375 config / kind:7375 token events on the
 // user's relays) and NIP-98 request signing.
 //
 // Compatibility note: the conversation key MUST come from
 // nostr-tools nip44.v2.utils.getConversationKey (the NIP-44 spec
-// implementation), NOT a bespoke ECDH+SHA-256 variant — custom
+// implementation), NOT a bespoke ECDH+SHA-256 variant - custom
 // derivations are not interoperable with other NIP-44 clients, which
 // silently breaks cross-app wallet/config decryption.
 

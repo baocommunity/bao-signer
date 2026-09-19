@@ -1,5 +1,5 @@
 /**
- * BaoLoginPanel — the unified BAO login GUI (React).
+ * BaoLoginPanel - the unified BAO login GUI (React).
  *
  * One component, every app: extension (approval-popup) → passkey →
  * NIP-46 remote signer → collapsed key-paste (recovery only), plus
@@ -7,7 +7,7 @@
  * keeps the reminder pending). All logic lives in the headless
  * loginFlowMachine; this is the thin, themeable view.
  *
- * Theming: CSS variables with BAO newspaper defaults —
+ * Theming: CSS variables with BAO newspaper defaults -
  *   --bao-accent, --bao-ink, --bao-muted, --bao-paper, --bao-rule,
  *   --bao-danger, --bao-success, --bao-font-mono, --bao-font-serif
  */
@@ -46,7 +46,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
   const flow = useMemo(() => createLoginFlow(), []);
 
   // Extensions inject window.nostr ASYNCHRONOUSLY (often after first paint).
-  // Checking once at mount hides the extension button forever — poll briefly
+  // Checking once at mount hides the extension button forever - poll briefly
   // and re-check on window focus so the button appears without a reload.
   const [extAvail, setExtAvail] = useState(flow.nip07Available);
   useEffect(() => {
@@ -133,7 +133,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
           Back up your seed phrase
         </h3>
         <p style={{ fontSize: 12, lineHeight: 1.6, color: V("muted", "#6b6259"), marginBottom: 12 }}>
-          These 24 words ARE your identity and wallet — in every BAO app, on any device.
+          These 24 words ARE your identity and wallet - in every BAO app, on any device.
           Save the file or write them down. Without a backup they cannot be recovered.
         </p>
         <div style={{ border: `1px solid ${V("rule", "#d8d2c8")}`, background: V("paper", "#f7f3ec"), padding: 12, marginBottom: 16, fontFamily: V("font-mono", "ui-monospace, monospace"), fontSize: 13, lineHeight: 2 }}>
@@ -143,7 +143,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button type="button" onClick={downloadBackup} style={btn("primary")}>
-            {downloaded ? "Backup file saved ✓ — download again" : "Save backup file (seed + nsec)"}
+            {downloaded ? "Backup file saved ✓ - download again" : "Save backup file (seed + nsec)"}
           </button>
           <button
             type="button"
@@ -155,14 +155,14 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
           </button>
           {!downloaded && (
             <p style={{ textAlign: "center", fontSize: 10, color: V("muted", "#6b6259") }}>
-              Save the file first — without it these words cannot be recovered.
+              Save the file first - without it these words cannot be recovered.
             </p>
           )}
           <div style={{ borderTop: `1px solid ${V("rule", "#d8d2c8")}`, paddingTop: 8, marginTop: 4 }}>
             <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 11, color: V("muted", "#6b6259)" ) }}>
               <input type="checkbox" checked={paper} onChange={(e) => setPaper(e.target.checked)} style={{ marginTop: 2 }} />
               <span>
-                Paper backup instead — I wrote down all 24 words and stored them safely.
+                Paper backup instead - I wrote down all 24 words and stored them safely.
                 (The backup reminder stays until you also save the file or dismiss it in Settings.)
               </span>
             </label>
@@ -211,12 +211,12 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
         <div style={{ border: `1px solid ${V("rule", "#d8d2c8")}`, background: V("paper", "#f7f3ec"), padding: 20 }}>
           <p style={{ fontSize: 12, lineHeight: 1.6, color: V("muted", "#6b6259"), marginBottom: 12 }}>
             Creates a new identity with a <b>24-word seed (256-bit entropy)</b>. The seed is the
-            key to your wallet and identity everywhere — save it in a password manager or on
+            key to your wallet and identity everywhere - save it in a password manager or on
             paper. We never see it. After registering, prefer signing in with an extension or
             passkey on your other devices.
           </p>
           <button type="button" onClick={register} disabled={busy} style={btn("primary")}>
-            {busy ? "Creating…" : "Create account — 24-word seed"}
+            {busy ? "Creating…" : "Create account - 24-word seed"}
           </button>
         </div>
       ) : (
@@ -238,7 +238,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
               <ol style={{ fontSize: 11, lineHeight: 1.7, color: V("muted", "#6b6259"), margin: 0, paddingLeft: 18 }}>
                 <li>
                   <b style={{ color: V("ink", "#1a1a1a") }}>Recommended:</b> install a Nostr signer
-                  extension (Alby, nos2x, Amber) — it signs for you and your keys never touch
+                  extension (Alby, nos2x, Amber) - it signs for you and your keys never touch
                   this page. The sign-in button appears here automatically once it is active.
                 </li>
                 <li>
@@ -279,7 +279,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
             {showNip46 && (
               <div style={{ borderTop: `1px solid ${V("rule", "#d8d2c8")}`, padding: 16 }}>
                 <p style={{ fontSize: 11, lineHeight: 1.6, color: V("muted", "#6b6259"), marginTop: 0 }}>
-                  Keys stay on your phone or signer service — this page only receives signatures.
+                  Keys stay on your phone or signer service - this page only receives signatures.
                   Paste your bunker:// connection URL from Amber or nsec.app.
                 </p>
                 <input
@@ -305,21 +305,21 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
             )}
           </div>
 
-          {/* Key-paste — recovery only, collapsed */}
+          {/* Key-paste - recovery only, collapsed */}
           <div style={{ border: `1px solid ${V("rule", "#d8d2c8")}`, background: V("paper", "#f7f3ec") }}>
             <button
               type="button"
               onClick={() => setShowSeed((v) => !v)}
               style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "8px 16px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", fontFamily: V("font-mono", "ui-monospace, monospace"), color: V("muted", "#6b6259"), background: "transparent", border: "none", cursor: "pointer" }}
             >
-              <span>Paste key material — recovery only</span>
+              <span>Paste key material - recovery only</span>
               <span>{showSeed ? "▲" : "▼"}</span>
             </button>
             {showSeed && (
               <div style={{ borderTop: `1px solid ${V("rule", "#d8d2c8")}`, padding: 16 }}>
                 <p style={{ fontSize: 11, lineHeight: 1.6, color: V("danger", "#a03428"), marginTop: 0 }}>
                   <b>Not recommended in a browser.</b> Anyone (or any malware) that sees these
-                  words controls your identity and funds. Prefer the extension — it exists so
+                  words controls your identity and funds. Prefer the extension - it exists so
                   you never have to do this.
                 </p>
                 <textarea
@@ -352,7 +352,7 @@ export function BaoLoginPanel({ onDone, loginPasskey, onBackupFile, className }:
 
       {busy && (
         <p style={{ marginTop: 16, textAlign: "center", fontSize: 11, color: V("muted", "#6b6259"), fontFamily: V("font-mono", "ui-monospace, monospace") }}>
-          Working — check for an authenticator / extension popup…
+          Working - check for an authenticator / extension popup…
         </p>
       )}
       {error && (

@@ -46,7 +46,7 @@ export function deriveNostrKeysFromPrfSeed(prfSeed: Uint8Array): NostrKeyPair {
   const seedHex = bytesToHex(prfSeed);
   // Domain-separated derivation, then scalar validation. sha256 output is
   // overwhelmingly likely to be a valid secp256k1 scalar, but an invalid one
-  // (0 or >= curve order N) would break getPublicKey — guard against it.
+  // (0 or >= curve order N) would break getPublicKey - guard against it.
   const privKeyBytes = ensureValidSecp256k1Scalar(
     sha256(new TextEncoder().encode(`bao:nostr:v1:${seedHex}`)),
   );
@@ -148,8 +148,8 @@ async function extractPrfSeedWithFallback(
  * SECURITY NOTE: `prfSeedHex` is the raw authenticator PRF output, NOT the
  * Nostr private key. The Nostr secret key is derived from it via
  * domain-separated SHA-256 (see `deriveNostrKeysFromPrfSeed`). Treat
- * `prfSeedHex` with the same care as a private key — anyone holding it can
- * re-derive the identity — but never encode it as an nsec: doing so would
+ * `prfSeedHex` with the same care as a private key - anyone holding it can
+ * re-derive the identity - but never encode it as an nsec: doing so would
  * produce a DIFFERENT identity than `pubkeyHex`/`npub` returned here.
  *
  * SERVER POLICY NOTE: the reference server (`bao-signer/server`) rejects
@@ -158,7 +158,7 @@ async function extractPrfSeedWithFallback(
  * the new credential, not of the claimed Nostr pubkey, so PRF identities are
  * linked through the authenticated account-link flow instead. Against the
  * reference server, use `linkBreezPasskey({ sessionToken })` after
- * establishing a session (see loginFlows.ts) — this function targets
+ * establishing a session (see loginFlows.ts) - this function targets
  * non-reference servers that accept direct PRF registration.
  */
 export async function registerBreezPasskey(options: {
@@ -168,9 +168,9 @@ export async function registerBreezPasskey(options: {
   apiBaseUrl?: string;
 } = {}): Promise<{
   credential: RegistrationResponseJSON;
-  /** Raw 32-byte PRF seed. NOT the Nostr private key — see security note above. */
+  /** Raw 32-byte PRF seed. NOT the Nostr private key - see security note above. */
   prfSeed: Uint8Array;
-  /** Hex encoding of `prfSeed`. NOT the Nostr private key — see security note above. */
+  /** Hex encoding of `prfSeed`. NOT the Nostr private key - see security note above. */
   prfSeedHex: string;
   pubkeyHex: string;
   npub: string;
@@ -286,9 +286,9 @@ export async function loginBreezPasskey(options: {
   apiBaseUrl?: string;
 } = {}): Promise<{
   assertion: AuthenticationResponseJSON;
-  /** Raw 32-byte PRF seed. NOT the Nostr private key — see registerBreezPasskey. */
+  /** Raw 32-byte PRF seed. NOT the Nostr private key - see registerBreezPasskey. */
   prfSeed: Uint8Array;
-  /** Hex encoding of `prfSeed`. NOT the Nostr private key — see registerBreezPasskey. */
+  /** Hex encoding of `prfSeed`. NOT the Nostr private key - see registerBreezPasskey. */
   prfSeedHex: string;
   pubkeyHex: string;
   npub: string;
@@ -384,8 +384,8 @@ export async function loginBreezPasskey(options: {
  * (PRF_ACCOUNT_LINK_REQUIRES_AUTH): an attestation proves control of the new
  * credential, not of a claimed Nostr pubkey. The supported flow is therefore:
  *
- *   1. establish a session first (guest/NIP-98/email/… — see loginFlows.ts)
- *   2. linkBreezPasskey({ sessionToken }) — binds a NEW passkey whose PRF
+ *   1. establish a session first (guest/NIP-98/email/… - see loginFlows.ts)
+ *   2. linkBreezPasskey({ sessionToken }) - binds a NEW passkey whose PRF
  *      derives the SAME deterministic identity to the session's account
  *
  * All three functions send `Authorization: Bearer <sessionToken>`.
@@ -399,7 +399,7 @@ function bearerHeaders(sessionToken: string): Record<string, string> {
 }
 
 /**
- * POST /auth/link/passkey/options — registration options for linking a new
+ * POST /auth/link/passkey/options - registration options for linking a new
  * passkey to the session's account. The returned options already carry a
  * challenge bound to the session pubkey server-side.
  */
@@ -426,7 +426,7 @@ export async function linkPasskeyOptions(opts: {
 }
 
 /**
- * POST /auth/link/passkey/register — complete the link with the created
+ * POST /auth/link/passkey/register - complete the link with the created
  * credential. The server verifies the attestation against the session-bound
  * challenge and binds the credential to the session's account.
  */

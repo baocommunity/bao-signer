@@ -1,5 +1,5 @@
 /**
- * SignerStorage — persistence contract for the bao-signer server.
+ * SignerStorage - persistence contract for the bao-signer server.
  *
  * The reference implementation (`MemorySignerStorage`) is suitable for
  * development and single-process deployments. Production deployments should
@@ -10,7 +10,7 @@
  * - `updateCredentialCounter` is the WebAuthn replay-attack prevention
  *   mechanism. It MUST be durable and MUST NOT fail silently.
  * - `insertAccount`/`insertCredential` should tolerate conflicts idempotently
- *   (ON CONFLICT DO NOTHING semantics) — the routes perform explicit
+ *   (ON CONFLICT DO NOTHING semantics) - the routes perform explicit
  *   existence checks first.
  * - OTP codes are stored HASHED (sha256). Never store plaintext codes.
  */
@@ -196,7 +196,7 @@ export class MemorySignerStorage implements SignerStorage {
     const existing = this.accounts.get(row.pubkey);
     if (existing) {
       existing.last_login_at = row.now;
-      // npub is deterministic from the pubkey — always safe to fill/refresh.
+      // npub is deterministic from the pubkey - always safe to fill/refresh.
       if (row.npub) existing.npub = row.npub;
       // nostr-only is monotonic: once 1 (server never held the nsec), never
       // downgrade it on a later guest-style login.

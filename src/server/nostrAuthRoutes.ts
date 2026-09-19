@@ -1,5 +1,5 @@
 /**
- * Nostr Auth — NIP-98 (kind 27235) signed-event login for existing keypairs.
+ * Nostr Auth - NIP-98 (kind 27235) signed-event login for existing keypairs.
  *
  * Same verification pipeline as guest auth, but issues a long-lived session
  * (30 days) and marks the account nostr-only.
@@ -83,8 +83,8 @@ export async function nostrAuthRoutes(app: FastifyInstance, opts: NostrAuthOptio
     const token = `bao_sess_${randomBytes(32).toString('hex')}`;
 
     try {
-      // Upsert (not insert-only): an existing account — e.g. one first seen
-      // via guest auth — must be marked nostr-only and have its npub + last
+      // Upsert (not insert-only): an existing account - e.g. one first seen
+      // via guest auth - must be marked nostr-only and have its npub + last
       // login refreshed, without clobbering its username or nsec_hash.
       await storage.upsertAccount({
         pubkey,
