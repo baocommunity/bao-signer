@@ -1,0 +1,20 @@
+# Copy to .github/workflows/public-repo-guard.yml in every PUBLIC repo and
+# mark the job as a REQUIRED status check. Self-contained (no private fetch),
+# path-based only (never greps its own text, so it cannot self-match).
+name: public-repo guard
+on: [pull_request, push]
+jobs:
+  no-private-agent-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if the private agent guard/memo is present
+        run: |
+          set -e
+          bad="$(git ls-files | grep -Ei '(^|/)secrets-guard\.js$' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::private agent secrets-guard present in a PUBLIC repo:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "public-repo guard: clean"
